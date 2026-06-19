@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  MANAGER
+  WORKER
+}
+
+enum TaskStatus {
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REWORK_REQUIRED
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_APPROVED
+  TASK_REJECTED
+  DEADLINE_REMINDER
+  MESSAGE_RECEIVED
+  SYSTEM
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  role            Role      @default(WORKER)
+  avatar          String?
+  isActive        Boolean   @default(true)
+  isEmailVerified Boolean   @default(false)
+  emailVerifyToken String?
+  resetToken      String?
+  resetTokenExpiry DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  managedBy       User?     @relation("ManagerWorkers", fields: [managedById], references: [id])
+  managedById     String?
+  workers         User[]    @relation("ManagerWorkers")
+
+  assignedTasks   Task[]    @relation("WorkerTasks")
+  createdTasks    Task[]    @relation("ManagerCreatedTasks")
+
+  submissions     Submission[]
+  reviews         Review[]
+  notifications   Notification[]
+  sentMessages    Message[]     @relation("SentMessages")
+  receivedMessages Message[]    @relation("ReceivedMessages")
+  auditLogs       AuditLog[]
+  payments        Payment[]
+  refreshTokens   RefreshToken[]
+
+  @@index([email])
+  @@index([role])
+  @@index([managedById])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  originalName String
+  fileType    String
+  fileSize    Int
+  storageUrl  String
+  thumbnailUrl String?
+  pageCount   Int?
+  uploadedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks       Task[]
+
+  @@index([uploadedById])
+}
+
+model Task {
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  priority       TaskPriority @default(MEDIUM)
+  status         TaskStatus   @default(ASSIGNED)
+  deadline       DateTime?
+  estimatedPages Int?
+  paymentAmount  Float        @default(0)
+  instructions   String?
+
+  documentId     String
+  document       Document     @relation(fields: [documentId], references: [id])
+
+  workerId       String?
+  worker         User?        @relation("WorkerTasks", fields: [workerId], references: [id])
+
+  createdById    String
+  createdBy      User         @relation("ManagerCreatedTasks", fields: [createdById], references: [id])
+
+  submissions    Submission[]
+  activeSubmission Submission? @relation("ActiveSubmission", fields: [activeSubmissionId], references: [id])
+  activeSubmissionId String?   @unique
+
+  notifications  Notification[]
+  messages       Message[]
+  auditLogs      AuditLog[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([workerId])
+  @@index([status])
+  @@index([createdById])
+  @@index([deadline])
+}
+
+model Submission {
+  id           String   @id @default(cuid())
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id])
+  workerId     String
+  worker       User     @relation(fields: [workerId], references: [id])
+
+  content      String   @db.Text
+  wordCount    Int      @default(0)
+  charCount    Int      @default(0)
+  timeSpentSec Int      @default(0)
+  isDraft      Boolean  @default(false)
+  version      Int      @default(1)
+
+  review       Review?
+  activeForTask Task?   @relation("ActiveSubmission")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([workerId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  reviewerId   String
+  reviewer     User       @relation(fields: [reviewerId], references: [id])
+
+  status       TaskStatus
+  comments     String?    @db.Text
+  accuracyScore Float?
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([reviewerId])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  workerId    String
+  worker      User     @relation(fields: [workerId], references: [id])
+  taskId      String?
+  amount      Float
+  type        String   // "task", "bonus", "penalty"
+  description String?
+  isPaid      Boolean  @default(false)
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([workerId])
+  @@index([isPaid])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      Task?            @relation(fields: [taskId], references: [id])
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id])
+  content     String   @db.Text
+  attachmentUrl String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([taskId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id])
+  action    String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
