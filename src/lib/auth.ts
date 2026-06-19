@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import * as argon2 from "argon2";
+import { randomBytes } from "crypto";
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
 
@@ -28,10 +29,7 @@ export async function verifyPassword(hash: string, password: string) {
 }
 
 export function generateToken(length = 32) {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let token = "";
-  for (let i = 0; i < length; i++) {
-    token += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return token;
+  return randomBytes(Math.ceil(length * 0.75))
+    .toString("base64url")
+    .slice(0, length);
 }

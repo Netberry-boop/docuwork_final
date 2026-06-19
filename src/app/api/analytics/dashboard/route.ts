@@ -39,6 +39,16 @@ export const GET = withAuth(async (req, user) => {
   }
 
   // Manager / Super Admin
+  const workerWhere = user!.role === Role.MANAGER
+    ? { role: Role.WORKER, managedById: user!.id }
+    : { role: Role.WORKER };
+  const taskWhere = user!.role === Role.MANAGER
+    ? { createdById: user!.id }
+    : {};
+  const paymentWhere = user!.role === Role.MANAGER
+    ? { worker: { managedById: user!.id } }
+    : {};
+
   const [
     totalWorkers,
     activeWorkers,
@@ -46,10 +56,11 @@ export const GET = withAuth(async (req, user) => {
     recentTasks,
     totalPayments,
   ] = await Promise.all([
-    db.user.count({ where: { role: Role.WORKER } }),
-    db.user.count({ where: { role: Role.WORKER, isActive: true } }),
-    db.task.groupBy({ by: ["status"], _count: true }),
+    db.user.count({ where: workerWhere }),
+    db.user.count({ where: { ...workerWhere, isActive: true } }),
+    db.task.groupBy({ by: ["status"], where: taskWhere, _count: true }),
     db.task.findMany({
+      where: taskWhere,
       take: 5,
       orderBy: { updatedAt: "desc" },
       include: {
@@ -57,7 +68,7 @@ export const GET = withAuth(async (req, user) => {
         document: { select: { name: true } },
       },
     }),
-    db.payment.aggregate({ _sum: { amount: true } }),
+    db.payment.aggregate({ where: paymentWhere, _sum: { amount: true } }),
   ]);
 
   const taskMap = taskStats.reduce(

@@ -29,6 +29,9 @@ export const GET = withAuth(async (req, user) => {
 
   if (user!.role === Role.WORKER) {
     where.workerId = user!.id;
+  } else if (user!.role === Role.MANAGER) {
+    where.createdById = user!.id;
+    if (workerId) where.workerId = workerId;
   } else if (workerId) {
     where.workerId = workerId;
   }
@@ -69,6 +72,28 @@ export const POST = withAuth(async (req, user) => {
   if (!parsed.success) return err(parsed.error.message);
 
   const data = parsed.data;
+  const document = await db.document.findUnique({
+    where: { id: data.documentId },
+    select: { id: true, uploadedById: true },
+  });
+  if (!document) return err("Document not found", 404);
+  if (user.role === Role.MANAGER && document.uploadedById !== user.id) {
+    return err("Document not found", 404);
+  }
+
+  if (data.workerId) {
+    const worker = await db.user.findUnique({
+      where: { id: data.workerId },
+      select: { id: true, role: true, managedById: true, isActive: true },
+    });
+    if (!worker || worker.role !== Role.WORKER || !worker.isActive) {
+      return err("Worker not found", 404);
+    }
+    if (user.role === Role.MANAGER && worker.managedById !== user.id) {
+      return err("Worker not found", 404);
+    }
+  }
+
   const task = await db.task.create({
     data: {
       ...data,

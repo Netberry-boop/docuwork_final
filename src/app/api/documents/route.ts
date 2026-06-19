@@ -14,6 +14,9 @@ export const GET = withAuth(async (req, user) => {
   const search = searchParams.get("search") || "";
 
   const where: Record<string, unknown> = {};
+  if (user!.role === Role.MANAGER) {
+    where.uploadedById = user!.id;
+  }
   if (search) {
     where.name = { contains: search, mode: "insensitive" };
   }

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { ok, err, withAuth, paginate, getPagination } from "@/lib/api";
+import { Role } from "@prisma/client";
 import { z } from "zod";
 
 const sendSchema = z.object({
@@ -59,7 +60,25 @@ export const POST = withAuth(async (req, user) => {
   if (!parsed.success) return err(parsed.error.errors[0].message);
 
   const receiver = await db.user.findUnique({ where: { id: parsed.data.receiverId } });
-  if (!receiver) return err("Recipient not found", 404);
+  if (!receiver || !receiver.isActive) return err("Recipient not found", 404);
+
+  if (parsed.data.taskId) {
+    const task = await db.task.findUnique({
+      where: { id: parsed.data.taskId },
+      select: { id: true, workerId: true, createdById: true },
+    });
+    if (!task) return err("Task not found", 404);
+
+    if (user!.role === Role.WORKER) {
+      const canMessageManager =
+        task.workerId === user!.id && parsed.data.receiverId === task.createdById;
+      if (!canMessageManager) return err("Forbidden", 403);
+    } else if (user!.role === Role.MANAGER) {
+      const canMessageWorker =
+        task.createdById === user!.id && parsed.data.receiverId === task.workerId;
+      if (!canMessageWorker) return err("Forbidden", 403);
+    }
+  }
 
   const message = await db.message.create({
     data: {

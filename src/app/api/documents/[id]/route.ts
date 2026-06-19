@@ -28,6 +28,9 @@ export const GET = withAuth(async (req, user, { params }) => {
   if (!doc) {
     return err("Document not found", 404);
   }
+  if (user!.role === Role.MANAGER && doc.uploadedById !== user!.id) {
+    return err("Document not found", 404);
+  }
 
   return ok(doc);
 });
@@ -44,6 +47,9 @@ export const DELETE = withAuth(
     // 1. Verify the document exists
     const doc = await db.document.findUnique({ where: { id } });
     if (!doc) {
+      return err("Document not found", 404);
+    }
+    if (user!.role === Role.MANAGER && doc.uploadedById !== user!.id) {
       return err("Document not found", 404);
     }
 

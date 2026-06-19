@@ -52,6 +52,9 @@ export const GET = withAuth(async (req, user, { params }) => {
   if (user!.role === Role.WORKER && task.workerId !== user!.id) {
     return err("Forbidden", 403);
   }
+  if (user!.role === Role.MANAGER && task.createdById !== user!.id) {
+    return err("Forbidden", 403);
+  }
 
   return ok(task);
 });
@@ -61,6 +64,9 @@ export const PATCH = withAuth(async (req, user, { params }) => {
 
   const task = await db.task.findUnique({ where: { id } });
   if (!task) return err("Task not found", 404);
+  if (user!.role === Role.MANAGER && task.createdById !== user!.id) {
+    return err("Forbidden", 403);
+  }
 
   const body = await req.json();
 
@@ -82,6 +88,19 @@ export const PATCH = withAuth(async (req, user, { params }) => {
   // Admin / Manager schema validation logic
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.errors[0].message, 400);
+
+  if (parsed.data.workerId) {
+    const worker = await db.user.findUnique({
+      where: { id: parsed.data.workerId },
+      select: { id: true, role: true, managedById: true, isActive: true },
+    });
+    if (!worker || worker.role !== Role.WORKER || !worker.isActive) {
+      return err("Worker not found", 404);
+    }
+    if (user!.role === Role.MANAGER && worker.managedById !== user!.id) {
+      return err("Worker not found", 404);
+    }
+  }
 
   // DB Operations inside a transaction for complete structural integrity
   try {
@@ -129,6 +148,9 @@ export const DELETE = withAuth(
 
     const task = await db.task.findUnique({ where: { id } });
     if (!task) return err("Task not found", 404);
+    if (user!.role === Role.MANAGER && task.createdById !== user!.id) {
+      return err("Forbidden", 403);
+    }
 
     try {
       await db.$transaction(async (tx) => {

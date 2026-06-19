@@ -83,8 +83,12 @@ export function withAuth(handler: AuthHandler, requiredRoles?: Role[]) {
 
 export function getPagination(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-  const limit = Math.min(100, parseInt(searchParams.get("limit") || "20"));
+  const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+  const parsedLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(100, Math.max(1, parsedLimit))
+    : 20;
   const skip = (page - 1) * limit;
   return { page, limit, skip };
 }

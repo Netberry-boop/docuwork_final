@@ -26,6 +26,9 @@ export const GET = withAuth(async (req, user, { params }) => {
   if (user!.role === Role.WORKER && task.workerId !== user!.id) {
     return err("Forbidden", 403);
   }
+  if (user!.role === Role.MANAGER && task.createdById !== user!.id) {
+    return err("Forbidden", 403);
+  }
 
   const submission = await db.submission.findFirst({
     where: { taskId: id },

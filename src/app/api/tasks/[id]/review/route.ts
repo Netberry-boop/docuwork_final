@@ -24,6 +24,9 @@ export const POST = withAuth(
     });
 
     if (!task) return err("Task not found", 404);
+    if (user!.role === Role.MANAGER && task.createdById !== user!.id) {
+      return err("Forbidden", 403);
+    }
     // ✨ FIX: Ensure activeSubmissionId actually exists on the model
     if (!task.activeSubmissionId) return err("No submission to review", 400); 
     if (!["SUBMITTED", "UNDER_REVIEW"].includes(task.status)) {
@@ -88,15 +91,20 @@ export const POST = withAuth(
 
           // Process payments safely if approved and valid payment setup exists
           if (status === "APPROVED" && task.paymentAmount && task.paymentAmount > 0) {
-            await tx.payment.create({
-              data: {
-                workerId: task.worker.id,
-                taskId: task.id,
-                amount: task.paymentAmount,
-                type: "task",
-                description: `Payment for: ${task.title || "Task assignment"}`,
-              },
+            const existingPayment = await tx.payment.findFirst({
+              where: { workerId: task.worker.id, taskId: task.id, type: "task" },
             });
+            if (!existingPayment) {
+              await tx.payment.create({
+                data: {
+                  workerId: task.worker.id,
+                  taskId: task.id,
+                  amount: task.paymentAmount,
+                  type: "task",
+                  description: `Payment for: ${task.title || "Task assignment"}`,
+                },
+              });
+            }
           }
         }
 

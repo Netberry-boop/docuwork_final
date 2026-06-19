@@ -55,13 +55,40 @@ export const api = {
   patch: (path: string, body?: unknown) =>
     fetchWithAuth(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: (path: string) => fetchWithAuth(path, { method: "DELETE" }),
-  upload: (path: string, formData: FormData) => {
-    const { accessToken } = useAuthStore.getState();
-    return fetch(`${BASE}${path}`, {
+  upload: async (path: string, formData: FormData) => {
+    const store = useAuthStore.getState();
+    let { accessToken } = store;
+    const { refreshToken, setAccessToken, logout } = store;
+
+    const runUpload = (token: string | null) => fetch(`${BASE}${path}`, {
       method: "POST",
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
+
+    let res = await runUpload(accessToken);
+    if (res.status === 401 && refreshToken) {
+      const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (refreshRes.ok) {
+        const json = await refreshRes.json();
+        const newToken = json.data?.accessToken;
+        if (newToken) {
+          setAccessToken(newToken);
+          accessToken = newToken;
+          res = await runUpload(accessToken);
+        }
+      } else {
+        logout();
+        if (typeof window !== "undefined") window.location.href = "/login";
+      }
+    }
+
+    return res;
   },
 };
 

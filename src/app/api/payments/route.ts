@@ -22,6 +22,9 @@ export const GET = withAuth(async (req, user) => {
 
   if (user!.role === Role.WORKER) {
     where.workerId = user!.id;
+  } else if (user!.role === Role.MANAGER) {
+    where.worker = { managedById: user!.id };
+    if (workerId) where.workerId = workerId;
   } else if (workerId) {
     where.workerId = workerId;
   }
@@ -60,6 +63,17 @@ export const POST = withAuth(async (req, user) => {
   const parsed = bonusSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.errors[0].message);
 
+  const worker = await db.user.findUnique({
+    where: { id: parsed.data.workerId },
+    select: { id: true, role: true, managedById: true, isActive: true },
+  });
+  if (!worker || worker.role !== Role.WORKER || !worker.isActive) {
+    return err("Worker not found", 404);
+  }
+  if (user!.role === Role.MANAGER && worker.managedById !== user!.id) {
+    return err("Worker not found", 404);
+  }
+
   const payment = await db.payment.create({
     data: {
       workerId: parsed.data.workerId,
@@ -83,6 +97,9 @@ export const PATCH = withAuth(async (req, user) => {
   const where: Record<string, unknown> = { isPaid: false };
   if (paymentIds?.length) where.id = { in: paymentIds };
   if (workerId) where.workerId = workerId;
+  if (user!.role === Role.MANAGER) {
+    where.worker = { managedById: user!.id };
+  }
 
   const { count } = await db.payment.updateMany({
     where,
