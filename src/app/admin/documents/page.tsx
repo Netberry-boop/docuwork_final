@@ -100,7 +100,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
           >
             <Upload className={cn("w-8 h-8 mx-auto mb-3", dragging ? "text-blue-500" : "text-slate-300")} />
             <p className="text-sm font-medium text-slate-700">Drop files here or click to browse</p>
-            <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG, TIFF, DOCX — up to 50MB each</p>
+            <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG, TIFF, DOCX — up to 4.5MB each</p>
             <input id="file-input" type="file" multiple accept={ALLOWED.join(",")}
               className="hidden" onChange={e => addFiles(e.target.files)} />
           </div>

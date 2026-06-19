@@ -7,7 +7,7 @@
 ```bash
 # 1. Clone and configure
 cp .env.example .env
-# Fill in .env (DATABASE_URL, JWT_SECRET, AWS creds, SMTP)
+# Fill in .env (DATABASE_URL, JWT_SECRET, Vercel Blob token, SMTP)
 
 # 2. Start services
 docker compose up -d
@@ -87,10 +87,7 @@ docker compose -f docker-compose.yml up -d
 ```
 DATABASE_URL=           # PostgreSQL connection string
 JWT_SECRET=             # Min 32 chars, random string
-AWS_REGION=
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_BUCKET_NAME=
+BLOB_READ_WRITE_TOKEN=  # Vercel Blob upload/delete token
 SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
@@ -119,7 +116,7 @@ src/
 │   ├── auth.ts           # JWT + argon2
 │   ├── db.ts             # Prisma singleton
 │   ├── api.ts            # Request helpers + RBAC middleware
-│   ├── storage.ts        # S3 upload/download
+│   ├── storage.ts        # Vercel Blob upload/delete
 │   ├── email.ts          # Nodemailer templates
 │   └── client.ts         # Frontend API client
 ├── store/
@@ -132,7 +129,7 @@ prisma/
 ## Production Checklist
 
 - [ ] Set strong JWT_SECRET (32+ chars)
-- [ ] Configure real S3 bucket (not MinIO)
+- [ ] Configure Vercel Blob storage
 - [ ] Configure SMTP for email delivery
 - [ ] Run `prisma migrate deploy` (not push)
 - [ ] Set NEXT_PUBLIC_APP_URL to your domain
@@ -141,5 +138,5 @@ prisma/
 - [ ] Configure Redis for rate limiting
 - [ ] Restrict CORS for your domain
 - [ ] Review and rotate default seed passwords
-- [ ] Enable S3 bucket CORS for your frontend domain
+- [ ] Verify uploaded Blob URLs are reachable from your frontend domain
 - [ ] Set up database backups

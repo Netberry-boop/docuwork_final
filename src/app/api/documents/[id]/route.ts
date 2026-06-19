@@ -53,15 +53,13 @@ export const DELETE = withAuth(
       return err(`Cannot delete: document is used in ${taskCount} task(s)`, 400);
     }
 
-    // 3. Attempt to delete the object from cloud storage (S3)
+    // 3. Attempt to delete the object from Vercel Blob.
     if (doc.storageUrl) {
       try {
-        const url = new URL(doc.storageUrl);
-        const key = url.pathname.slice(1); // Strips the leading slash to get the S3 key
-        await deleteFile(key);
+        await deleteFile(doc.storageUrl);
       } catch (error) {
         // Log the storage failure but don't block DB cleanup if storage is already orphaned
-        console.error("S3 delete failed for", doc.storageUrl, error);
+        console.error("Blob delete failed for", doc.storageUrl, error);
       }
     }
 

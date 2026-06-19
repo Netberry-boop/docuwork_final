@@ -80,7 +80,7 @@ export const POST = withAuth(async (req, user) => {
       userId: parsed.data.receiverId,
       taskId: parsed.data.taskId,
       type: "MESSAGE_RECEIVED",
-      title: `New message from ${receiver.name}`,
+      title: `New message from ${user!.name}`,
       body: parsed.data.content.slice(0, 100),
     },
   });

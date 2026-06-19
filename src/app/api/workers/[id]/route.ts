@@ -36,6 +36,10 @@ export const GET = withAuth(async (req, user, { params }) => {
   });
 
   if (!worker) return err("Worker not found", 404);
+  if (worker.role !== Role.WORKER) return err("Worker not found", 404);
+  if (user!.role === Role.MANAGER && worker.managedById !== user!.id) {
+    return err("Forbidden", 403);
+  }
 
   // Run aggregations concurrently
   const [taskStats, totalEarnings] = await Promise.all([
@@ -61,7 +65,7 @@ export const GET = withAuth(async (req, user, { params }) => {
     taskStats: taskMap,
     totalEarnings: totalEarnings._sum.amount ?? 0,
   });
-});
+}, [Role.SUPER_ADMIN, Role.MANAGER]);
 
 /**
  * PATCH /api/workers/[id]
@@ -71,6 +75,15 @@ export const PATCH = withAuth(
   async (req, user, { params }) => {
     // ✨ FIX: Await params for Next.js 15+ compatibility
     const { id } = await params;
+
+    const targetUser = await db.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, managedById: true },
+    });
+    if (!targetUser || targetUser.role !== Role.WORKER) return err("Worker not found", 404);
+    if (user!.role === Role.MANAGER && targetUser.managedById !== user!.id) {
+      return err("Forbidden", 403);
+    }
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
@@ -132,8 +145,14 @@ export const DELETE = withAuth(
     // ✨ FIX: Await params for Next.js 15+ compatibility
     const { id } = await params;
 
-    const targetUser = await db.user.findUnique({ where: { id } });
-    if (!targetUser) return err("Worker not found", 404);
+    const targetUser = await db.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, managedById: true },
+    });
+    if (!targetUser || targetUser.role !== Role.WORKER) return err("Worker not found", 404);
+    if (user!.role === Role.MANAGER && targetUser.managedById !== user!.id) {
+      return err("Forbidden", 403);
+    }
 
     try {
       await db.$transaction([

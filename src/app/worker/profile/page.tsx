@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 
 export default function WorkerProfilePage() {
   const router = useRouter();
-  const { user, logout, refreshToken } = useAuthStore();
+  const { user, logout, refreshToken, updateUser } = useAuthStore();
   const [name, setName] = useState(user?.name || "");
   const [newPwd, setNewPwd] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -20,7 +20,8 @@ export default function WorkerProfilePage() {
     e.preventDefault();
     setSavingProfile(true);
     try {
-      await api.patch(`/workers/${user?.id}`, { name }).then(r => apiJson(r));
+      const json = await api.patch("/auth/me", { name }).then(r => apiJson<any>(r));
+      updateUser({ name: json.data.name });
       toast("Profile updated", "success");
     } catch (err: any) {
       toast(err.message, "error");
@@ -34,7 +35,7 @@ export default function WorkerProfilePage() {
     if (newPwd.length < 8) { toast("Password must be at least 8 characters", "error"); return; }
     setSavingPwd(true);
     try {
-      await api.patch(`/workers/${user?.id}`, { password: newPwd }).then(r => apiJson(r));
+      await api.patch("/auth/me", { password: newPwd }).then(r => apiJson(r));
       toast("Password changed. Logging you out...", "success");
       setTimeout(() => { logout(); router.push("/login"); }, 1500);
     } catch (err: any) {

@@ -5,12 +5,11 @@ import AppShell from "@/components/shared/AppShell";
 import { useAuthStore } from "@/store/auth";
 import { api, apiJson } from "@/lib/client";
 import { toast } from "@/components/ui/toaster";
-import { Loader2, Save, Shield, Bell, Database } from "lucide-react";
+import { Loader2, Save, Shield, Database } from "lucide-react";
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const [name, setName] = useState(user?.name || "");
-  const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
@@ -19,7 +18,8 @@ export default function SettingsPage() {
     e.preventDefault();
     setSavingProfile(true);
     try {
-      await api.patch(`/workers/${user?.id}`, { name }).then(r => apiJson(r));
+      const json = await api.patch("/auth/me", { name }).then(r => apiJson<any>(r));
+      updateUser({ name: json.data.name });
       toast("Profile updated", "success");
     } catch (err: any) {
       toast(err.message, "error");
@@ -33,9 +33,9 @@ export default function SettingsPage() {
     if (newPwd.length < 8) { toast("Password must be at least 8 characters", "error"); return; }
     setSavingPwd(true);
     try {
-      await api.patch(`/workers/${user?.id}`, { password: newPwd }).then(r => apiJson(r));
+      await api.patch("/auth/me", { password: newPwd }).then(r => apiJson(r));
       toast("Password changed. Please log in again.", "success");
-      setCurrentPwd(""); setNewPwd("");
+      setNewPwd("");
     } catch (err: any) {
       toast(err.message, "error");
     } finally {
@@ -116,7 +116,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-between py-1">
               <span className="text-slate-500">Stack</span>
-              <span className="font-medium">Next.js 15 · PostgreSQL · Prisma</span>
+              <span className="font-medium">Next.js 16 · PostgreSQL · Prisma</span>
             </div>
           </div>
         </div>

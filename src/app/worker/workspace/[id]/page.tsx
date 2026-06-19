@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiJson, apiData } from "@/lib/client";
-import { useAuthStore } from "@/store/auth";
 import {
   Save, Send, Flag, ChevronLeft, ZoomIn, ZoomOut,
   Loader2, CheckCircle, AlertCircle,
@@ -17,12 +16,12 @@ export default function WorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const { user } = useAuthStore();
 
   const [content, setContent] = useState("");
   const [timeSpent, setTimeSpent] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [zoom, setZoom] = useState(100);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [issueText, setIssueText] = useState("");
   const [showIssue, setShowIssue] = useState(false);
@@ -30,9 +29,24 @@ export default function WorkspacePage() {
 
   const timerRef = useRef<NodeJS.Timeout>();
   const autosaveRef = useRef<NodeJS.Timeout>();
+  const draftRef = useRef({
+    content: "",
+    wordCount: 0,
+    charCount: 0,
+    timeSpentSec: 0,
+  });
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const charCount = content.length;
+
+  useEffect(() => {
+    draftRef.current = {
+      content,
+      wordCount,
+      charCount,
+      timeSpentSec: timeSpent,
+    };
+  }, [content, wordCount, charCount, timeSpent]);
 
   // Fetch task
   const { data: task, isLoading: taskLoading } = useQuery({
@@ -52,7 +66,7 @@ export default function WorkspacePage() {
       setContent(draft.content);
       if (draft.timeSpentSec) setTimeSpent(draft.timeSpentSec);
     }
-  }, [draft]);
+  }, [draft, content]);
 
   // Timer
   useEffect(() => {
@@ -64,14 +78,15 @@ export default function WorkspacePage() {
 
   // Autosave
   const saveDraft = useCallback(async () => {
-    if (!content.trim()) return;
+    const draftData = draftRef.current;
+    if (!draftData.content.trim()) return;
     setSaveStatus("saving");
     try {
       await api.post(`/tasks/${id}/submit`, {
-        content,
-        wordCount,
-        charCount,
-        timeSpentSec: timeSpent,
+        content: draftData.content,
+        wordCount: draftData.wordCount,
+        charCount: draftData.charCount,
+        timeSpentSec: draftData.timeSpentSec,
         isDraft: true,
       }).then(r => apiJson(r));
       setSaveStatus("saved");
@@ -79,7 +94,7 @@ export default function WorkspacePage() {
     } catch {
       setSaveStatus("error");
     }
-  }, [content, wordCount, charCount, timeSpent, id]);
+  }, [id]);
 
   useEffect(() => {
     autosaveRef.current = setInterval(saveDraft, AUTOSAVE_MS);
@@ -94,6 +109,10 @@ export default function WorkspacePage() {
       api.patch(`/tasks/${id}`, { status: "IN_PROGRESS" }).catch(() => {});
     }
   }, [content, task?.status, id]);
+
+  useEffect(() => {
+    setPreviewFailed(false);
+  }, [task?.document?.storageUrl]);
 
   const submitMutation = useMutation({
     mutationFn: () =>
@@ -153,14 +172,6 @@ export default function WorkspacePage() {
     rawUrl.includes(".pdf") || 
     rawUrl.includes("pdf") ||
     rawName.includes(".pdf");
-
-  // Console log diagnostics to see exactly what data structure your backend is returning
-  console.log("=== DESKTOP WORKSPACE DEBUGGER ===");
-  console.log("Document Name:", task.document?.name);
-  console.log("Calculated IsPdf State:", isPdf);
-  console.log("Database File Type Field:", task.document?.fileType);
-  console.log("Cloud Storage Asset URL:", task.document?.storageUrl);
-  console.log("==================================");
 
   return (
     <div className="fixed inset-0 bg-slate-100 flex flex-col select-none">
@@ -263,7 +274,24 @@ export default function WorkspacePage() {
                 className="w-full h-full flex items-center justify-center transition-all"
                 style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center center" }}
               >
-                {isPdf ? (
+                {previewFailed ? (
+                  <div className="w-[450px] bg-white p-8 border border-slate-200 rounded-xl text-center shadow-lg">
+                    <FileText className="w-12 h-12 text-blue-600 mx-auto mb-3" />
+                    <h4 className="font-semibold text-slate-800 text-sm mb-1">Secure Document Asset Panel</h4>
+                    <p className="text-xs text-slate-400 mb-4">
+                      Preview is restricted for this file. Open it in a new tab to view it side-by-side.
+                    </p>
+                    <a
+                      href={task.document.storageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg"
+                    >
+                      Open Reference Document
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ) : isPdf ? (
                   <object
                     data={`${task.document.storageUrl}#toolbar=1&navpanes=0&view=FitH`}
                     type="application/pdf"
@@ -290,23 +318,7 @@ export default function WorkspacePage() {
                     src={task.document.storageUrl}
                     alt="Document Asset View"
                     className="max-w-full max-h-full object-contain shadow-md bg-white border border-slate-300 rounded-sm"
-                    onError={(e) => {
-                      // Ultra-safety fallback: If an asset falls into img component but fails to load as a pixel graphic, force change layout to link box
-                      const element = e.currentTarget;
-                      const canvas = element.parentElement;
-                      if (canvas) {
-                        canvas.innerHTML = `
-                          <div class="w-[450px] bg-white p-8 border border-slate-200 rounded-xl text-center shadow-lg">
-                            <svg class="w-12 h-12 text-blue-600 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                            <h4 class="font-semibold text-slate-800 text-sm mb-1">Secure Document Asset Panel</h4>
-                            <p class="text-xs text-slate-400 mb-4">Preview restricted by frame credentials. Launch to view side-by-side:</p>
-                            <a href="${task.document.storageUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg">
-                              Open Reference Document
-                            </a>
-                          </div>
-                        `;
-                      }
-                    }}
+                    onError={() => setPreviewFailed(true)}
                   />
                 )}
               </div>
