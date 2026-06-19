@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")          // Uses the connection pooler URL
-  directUrl = env("DATABASE_URL_UNPOOLED") // ✨ Add this line for direct migrations
+  url       = env("POSTGRES_PRISMA_URL")        // ✨ Changed from DATABASE_URL
+  directUrl = env("POSTGRES_URL_NON_POOLING")   // ✨ Changed from DATABASE_URL_UNPOOLED
 }
 
 enum Role {
