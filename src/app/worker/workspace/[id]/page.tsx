@@ -142,9 +142,25 @@ export default function WorkspacePage() {
 
   const isCompleted = ["APPROVED", "COMPLETED", "SUBMITTED"].includes(task.status);
   
-  // Explicit format confirmation handles appending standard toolbar query string configs for preview optimizations
-  const cleanUrl = task.document?.storageUrl ? task.document.storageUrl.split('?')[0] : "";
-  const isPdf = task.document?.fileType?.toLowerCase().includes("pdf") || cleanUrl.toLowerCase().endsWith(".pdf");
+  // --- BULLETPROOF PDF IDENTIFICATION LOGIC ---
+  const rawFileType = String(task.document?.fileType || "").toLowerCase().trim();
+  const rawUrl = String(task.document?.storageUrl || "").toLowerCase().trim();
+  const rawName = String(task.document?.name || "").toLowerCase().trim();
+
+  // If fileType says pdf, url contains pdf, or the raw name contains .pdf, handle it as a PDF
+  const isPdf = 
+    rawFileType.includes("pdf") || 
+    rawUrl.includes(".pdf") || 
+    rawUrl.includes("pdf") ||
+    rawName.includes(".pdf");
+
+  // Console log diagnostics to see exactly what data structure your backend is returning
+  console.log("=== DESKTOP WORKSPACE DEBUGGER ===");
+  console.log("Document Name:", task.document?.name);
+  console.log("Calculated IsPdf State:", isPdf);
+  console.log("Database File Type Field:", task.document?.fileType);
+  console.log("Cloud Storage Asset URL:", task.document?.storageUrl);
+  console.log("==================================");
 
   return (
     <div className="fixed inset-0 bg-slate-100 flex flex-col select-none">
@@ -248,24 +264,22 @@ export default function WorkspacePage() {
                 style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center center" }}
               >
                 {isPdf ? (
-                  /* Embed dynamic object engine to bypass standard frame sandbox restrictions natively */
                   <object
                     data={`${task.document.storageUrl}#toolbar=1&navpanes=0&view=FitH`}
                     type="application/pdf"
                     className="w-full h-full rounded-md shadow-lg border border-slate-300 bg-white"
                   >
-                    {/* Native fallback structure if embedded runtime rendering errors out */}
                     <div className="w-[500px] bg-white p-8 border border-slate-200 rounded-xl text-center shadow-md flex flex-col items-center justify-center mx-auto">
                       <FileText className="w-12 h-12 text-blue-600 mb-3" />
-                      <h4 className="font-semibold text-slate-800 text-sm mb-1">Inline Preview Interrupted</h4>
-                      <p className="text-xs text-slate-400 mb-4 max-w-xs">Your system browser context requires launching this source file explicitly:</p>
+                      <h4 className="font-semibold text-slate-800 text-sm mb-1">Inline View Standby</h4>
+                      <p className="text-xs text-slate-400 mb-4 max-w-xs">Click here to render or inspect the attached workflow file directly:</p>
                       <a 
                         href={task.document.storageUrl} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium text-xs rounded-lg shadow"
                       >
-                        Open Secure View Panel
+                        Open Source File
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
@@ -276,6 +290,23 @@ export default function WorkspacePage() {
                     src={task.document.storageUrl}
                     alt="Document Asset View"
                     className="max-w-full max-h-full object-contain shadow-md bg-white border border-slate-300 rounded-sm"
+                    onError={(e) => {
+                      // Ultra-safety fallback: If an asset falls into img component but fails to load as a pixel graphic, force change layout to link box
+                      const element = e.currentTarget;
+                      const canvas = element.parentElement;
+                      if (canvas) {
+                        canvas.innerHTML = `
+                          <div class="w-[450px] bg-white p-8 border border-slate-200 rounded-xl text-center shadow-lg">
+                            <svg class="w-12 h-12 text-blue-600 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                            <h4 class="font-semibold text-slate-800 text-sm mb-1">Secure Document Asset Panel</h4>
+                            <p class="text-xs text-slate-400 mb-4">Preview restricted by frame credentials. Launch to view side-by-side:</p>
+                            <a href="${task.document.storageUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg">
+                              Open Reference Document
+                            </a>
+                          </div>
+                        `;
+                      }
+                    }}
                   />
                 )}
               </div>
