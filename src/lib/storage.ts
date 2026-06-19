@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
@@ -17,6 +17,12 @@ export async function uploadFile(
   });
 
   return { key, url: blob.url };
+}
+
+// Added this back so the document deletion api route works perfectly!
+export async function deleteFile(url: string) {
+  if (!url) return;
+  await del(url);
 }
 
 export const ALLOWED_TYPES: Record<string, string> = {
