@@ -143,6 +143,11 @@ export default function WorkspacePage() {
 
   const isCompleted = ["APPROVED", "COMPLETED", "SUBMITTED"].includes(task.status);
 
+  // Helper logic to identify PDFs via fileType metadata or standard URL extension check
+  const isPdf = 
+    task.document?.fileType?.toLowerCase().includes("pdf") || 
+    task.document?.storageUrl?.toLowerCase().split('?')[0].endsWith(".pdf");
+
   return (
     <div className="fixed inset-0 bg-slate-100 flex flex-col">
       {/* Top bar */}
@@ -239,7 +244,7 @@ export default function WorkspacePage() {
           <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
             {task.document?.storageUrl ? (
               <div style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center" }}>
-                {task.document.fileType?.includes("pdf") ? (
+                {isPdf ? (
                   <div className="w-[600px] h-[750px] bg-white shadow-xl flex flex-col items-center justify-center p-8 border border-slate-200 rounded-2xl text-center mt-4">
                     <FileText className="w-16 h-16 text-blue-600 mb-4 stroke-[1.5]" />
                     <h3 className="font-semibold text-slate-800 text-base mb-1">Secure PDF Link Ready</h3>
@@ -260,9 +265,26 @@ export default function WorkspacePage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={task.document.storageUrl}
-                    alt="Document Source Frame"
+                    alt="Document Content Frame"
                     className="max-w-none shadow-lg bg-white border border-slate-300 rounded-sm"
                     style={{ width: 800 }}
+                    onError={(e) => {
+                      // Fallback: If code drops through to img layout but asset is still a text/pdf document, transform frame dynamically
+                      const element = e.currentTarget;
+                      const canvas = element.parentElement;
+                      if (canvas) {
+                        canvas.innerHTML = `
+                          <div class="w-[600px] h-[400px] bg-white border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center p-8 shadow-xl mt-4">
+                            <svg class="w-12 h-12 text-blue-600 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            <h4 class="font-semibold text-slate-800 text-sm mb-1">Attached Workspace Document</h4>
+                            <p class="text-xs text-slate-400 max-w-xs mb-5">Click below to load the secure cloud storage file link dynamically in a companion browser window:</p>
+                            <a href="${task.document.storageUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-medium text-xs rounded-xl shadow transition">
+                              Open Source Document
+                            </a>
+                          </div>
+                        `;
+                      }
+                    }}
                   />
                 )}
               </div>
