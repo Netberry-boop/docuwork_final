@@ -7,8 +7,8 @@ import { api, apiJson, apiData } from "@/lib/client";
 import { useAuthStore } from "@/store/auth";
 import {
   Save, Send, Flag, ChevronLeft, ZoomIn, ZoomOut,
-  RotateCw, Loader2, CheckCircle, AlertCircle,
-  MessageSquare, FileText, Clock, Type
+  Loader2, CheckCircle, AlertCircle,
+  FileText, Clock, Type, ExternalLink
 } from "lucide-react";
 
 const AUTOSAVE_MS = 10_000;
@@ -235,22 +235,33 @@ export default function WorkspacePage() {
             </button>
           </div>
 
-          {/* Document */}
+          {/* Document Content Canvas Viewport */}
           <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
             {task.document?.storageUrl ? (
               <div style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center" }}>
                 {task.document.fileType?.includes("pdf") ? (
-                  <iframe
-                    src={task.document.storageUrl}
-                    className="w-[800px] h-[1100px] bg-white shadow-lg"
-                    title="Document"
-                  />
+                  <div className="w-[600px] h-[750px] bg-white shadow-xl flex flex-col items-center justify-center p-8 border border-slate-200 rounded-2xl text-center mt-4">
+                    <FileText className="w-16 h-16 text-blue-600 mb-4 stroke-[1.5]" />
+                    <h3 className="font-semibold text-slate-800 text-base mb-1">Secure PDF Link Ready</h3>
+                    <p className="text-xs text-slate-400 max-w-sm mb-6 leading-relaxed">
+                      To safeguard document permissions and support cross-origin streaming smoothly, open this reference file directly below:
+                    </p>
+                    <a 
+                      href={task.document.storageUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-xl shadow-md shadow-blue-200 hover:shadow-none transition-all duration-200"
+                    >
+                      Open PDF in New Tab
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={task.document.storageUrl}
-                    alt="Document"
-                    className="max-w-none shadow-lg bg-white"
+                    alt="Document Source Frame"
+                    className="max-w-none shadow-lg bg-white border border-slate-300 rounded-sm"
                     style={{ width: 800 }}
                   />
                 )}
