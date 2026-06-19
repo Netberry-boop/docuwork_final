@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiJson } from "@/lib/client";
 import AppShell from "@/components/shared/AppShell";
-import { formatDate, timeAgo, cn } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import {
   Plus, Search, Loader2, UserCheck, UserX,
-  MoreVertical, Mail, CheckCircle, XCircle, Eye
+  Mail, CheckCircle, Trash2
 } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 
@@ -137,6 +137,15 @@ export default function WorkersPage() {
     onError: (e: any) => toast(e.message, "error"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/workers/${id}`).then(r => apiJson<any>(r)),
+    onSuccess: (json) => {
+      qc.invalidateQueries({ queryKey: ["workers"] });
+      toast(json.data?.message || "Worker removed", "success");
+    },
+    onError: (e: any) => toast(e.message, "error"),
+  });
+
   const workers: Worker[] = data?.data || [];
 
   return (
@@ -217,7 +226,7 @@ export default function WorkersPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => toggleMutation.mutate({ id: w.id, isActive: !w.isActive })}
-                    disabled={toggleMutation.isPending}
+                    disabled={toggleMutation.isPending || deleteMutation.isPending}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition",
                       w.isActive
@@ -230,6 +239,18 @@ export default function WorkersPage() {
                     className="p-1.5 border border-slate-200 rounded-lg text-slate-400 hover:text-blue-600 hover:border-blue-200 transition">
                     <Mail className="w-4 h-4" />
                   </a>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete ${w.name}? Workers with task history will be deactivated instead.`)) {
+                        deleteMutation.mutate(w.id);
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="p-1.5 border border-red-200 rounded-lg text-red-500 hover:bg-red-50 hover:border-red-300 transition disabled:opacity-50"
+                    title="Delete worker"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}

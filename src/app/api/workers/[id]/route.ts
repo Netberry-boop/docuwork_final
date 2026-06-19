@@ -138,11 +138,10 @@ export const PATCH = withAuth(
 
 /**
  * DELETE /api/workers/[id]
- * Deactivates worker account profile via standard soft-delete behavior.
+ * Removes unused workers, or deactivates workers that already have operational history.
  */
 export const DELETE = withAuth(
   async (req, user, { params }) => {
-    // ✨ FIX: Await params for Next.js 15+ compatibility
     const { id } = await params;
 
     const targetUser = await db.user.findUnique({
@@ -155,25 +154,60 @@ export const DELETE = withAuth(
     }
 
     try {
-      await db.$transaction([
-        db.user.update({
-          where: { id },
-          data: { isActive: false },
-        }),
-        db.auditLog.create({
+      const result = await db.$transaction(async (tx) => {
+        const [taskCount, submissionCount, paymentCount, messageCount] = await Promise.all([
+          tx.task.count({ where: { workerId: id } }),
+          tx.submission.count({ where: { workerId: id } }),
+          tx.payment.count({ where: { workerId: id } }),
+          tx.message.count({
+            where: {
+              OR: [{ senderId: id }, { receiverId: id }],
+            },
+          }),
+        ]);
+
+        const hasOperationalHistory =
+          taskCount > 0 || submissionCount > 0 || paymentCount > 0 || messageCount > 0;
+
+        await tx.refreshToken.deleteMany({ where: { userId: id } });
+
+        if (hasOperationalHistory) {
+          await tx.user.update({
+            where: { id },
+            data: { isActive: false },
+          });
+        } else {
+          await tx.auditLog.deleteMany({ where: { userId: id } });
+          await tx.notification.deleteMany({ where: { userId: id } });
+          await tx.user.delete({ where: { id } });
+        }
+
+        await tx.auditLog.create({
           data: {
             userId: user!.id,
-            action: "WORKER_DEACTIVATED",
-            details: { workerId: id },
+            action: hasOperationalHistory ? "WORKER_DEACTIVATED" : "WORKER_DELETED",
+            details: {
+              workerId: id,
+              mode: hasOperationalHistory ? "deactivated" : "deleted",
+              preservedHistory: hasOperationalHistory,
+            },
           },
-        }),
-      ]);
-    } catch (error) {
-      console.error("Worker deactivation failed:", error);
-      return err("Failed to deactivate worker status", 500);
-    }
+        });
 
-    return ok({ message: "Worker deactivated successfully" });
+        return {
+          message: hasOperationalHistory
+            ? "Worker has history and was deactivated"
+            : "Worker deleted successfully",
+          deleted: !hasOperationalHistory,
+          deactivated: hasOperationalHistory,
+        };
+      });
+
+      return ok(result);
+    } catch (error) {
+      console.error("Worker deletion failed:", error);
+      return err("Failed to delete worker", 500);
+    }
   },
   [Role.SUPER_ADMIN, Role.MANAGER]
 );
