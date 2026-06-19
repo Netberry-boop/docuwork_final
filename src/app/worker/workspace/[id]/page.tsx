@@ -8,15 +8,8 @@ import { useAuthStore } from "@/store/auth";
 import {
   Save, Send, Flag, ChevronLeft, ZoomIn, ZoomOut,
   Loader2, CheckCircle, AlertCircle,
-  FileText, Clock, Type, ChevronRight, ChevronLeft as ChevronLeftIcon
+  FileText, Clock, Type, ExternalLink
 } from "lucide-react";
-
-// Initialize react-pdf and configure its cross-origin service worker thread
-import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const AUTOSAVE_MS = 10_000;
 
@@ -34,10 +27,6 @@ export default function WorkspacePage() {
   const [issueText, setIssueText] = useState("");
   const [showIssue, setShowIssue] = useState(false);
   const [flagSending, setFlagSending] = useState(false);
-
-  // PDF Page Management States
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageNumber, setPageNumber] = useState<number>(1);
 
   const timerRef = useRef<NodeJS.Timeout>();
   const autosaveRef = useRef<NodeJS.Timeout>();
@@ -129,11 +118,6 @@ export default function WorkspacePage() {
     return `${m}m ${sec}s`;
   }
 
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-    setNumPages(numPages);
-    setPageNumber(1);
-  }
-
   if (taskLoading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-slate-50">
@@ -157,9 +141,10 @@ export default function WorkspacePage() {
   }
 
   const isCompleted = ["APPROVED", "COMPLETED", "SUBMITTED"].includes(task.status);
-  const isPdf = 
-    task.document?.fileType?.toLowerCase().includes("pdf") || 
-    task.document?.storageUrl?.toLowerCase().split('?')[0].endsWith(".pdf");
+  
+  // Explicit format confirmation handles appending standard toolbar query string configs for preview optimizations
+  const cleanUrl = task.document?.storageUrl ? task.document.storageUrl.split('?')[0] : "";
+  const isPdf = task.document?.fileType?.toLowerCase().includes("pdf") || cleanUrl.toLowerCase().endsWith(".pdf");
 
   return (
     <div className="fixed inset-0 bg-slate-100 flex flex-col select-none">
@@ -234,44 +219,20 @@ export default function WorkspacePage() {
       {/* Split pane */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Document viewer */}
-        <div className="w-1/2 bg-slate-700 flex flex-col border-r border-slate-300">
+        <div className="w-1/2 bg-slate-200 flex flex-col border-r border-slate-300">
           {/* Viewer toolbar */}
-          <div className="h-10 bg-slate-800 flex items-center justify-between px-3 shrink-0 select-none z-10 border-b border-slate-900">
-            <span className="text-xs text-slate-300 truncate max-w-[180px]">{task.document?.name}</span>
-            
-            {/* Multi-page controls for inline PDFs */}
-            {isPdf && numPages && (
-              <div className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-md border border-slate-700/50">
-                <button
-                  disabled={pageNumber <= 1}
-                  onClick={() => setPageNumber(p => Math.max(1, p - 1))}
-                  className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition"
-                >
-                  <ChevronLeftIcon className="w-3.5 h-3.5" />
-                </button>
-                <span className="text-[11px] text-slate-300 font-medium tracking-wide">
-                  Page {pageNumber} / {numPages}
-                </span>
-                <button
-                  disabled={pageNumber >= (numPages || 1)}
-                  onClick={() => setPageNumber(p => Math.min(numPages || 1, p + 1))}
-                  className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
+          <div className="h-10 bg-slate-800 flex items-center justify-between px-3 shrink-0">
+            <span className="text-xs text-slate-300 truncate max-w-xs">{task.document?.name}</span>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setZoom(z => Math.max(40, z - 12))}
+                onClick={() => setZoom(z => Math.max(50, z - 10))}
                 className="p-1 text-slate-400 hover:text-white transition"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
               <span className="text-xs text-slate-300 w-12 text-center font-mono">{zoom}%</span>
               <button
-                onClick={() => setZoom(z => Math.min(250, z + 12))}
+                onClick={() => setZoom(z => Math.min(200, z + 10))}
                 className="p-1 text-slate-400 hover:text-white transition"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
@@ -280,44 +241,41 @@ export default function WorkspacePage() {
           </div>
 
           {/* Document Content Canvas Viewport */}
-          <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-slate-600/95 scrollbar-thin">
+          <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-100">
             {task.document?.storageUrl ? (
-              <div className="origin-top transition-transform duration-75 mt-2" style={{ transform: `scale(${zoom / 100})` }}>
+              <div 
+                className="w-full h-full flex items-center justify-center transition-all"
+                style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center center" }}
+              >
                 {isPdf ? (
-                  <Document
-                    file={task.document.storageUrl}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    loading={
-                      <div className="flex flex-col items-center gap-2 text-white/70 p-12">
-                        <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
-                        <p className="text-xs font-medium">Streaming Document...</p>
-                      </div>
-                    }
-                    error={
-                      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center text-red-200 max-w-sm shadow-xl">
-                        <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-                        <p className="text-xs font-semibold mb-1">Failed to read canvas stream</p>
-                        <a href={task.document.storageUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400 underline hover:text-blue-300">
-                          Access fallback download link securely
-                        </a>
-                      </div>
-                    }
+                  /* Embed dynamic object engine to bypass standard frame sandbox restrictions natively */
+                  <object
+                    data={`${task.document.storageUrl}#toolbar=1&navpanes=0&view=FitH`}
+                    type="application/pdf"
+                    className="w-full h-full rounded-md shadow-lg border border-slate-300 bg-white"
                   >
-                    <Page 
-                      pageNumber={pageNumber} 
-                      className="shadow-2xl border border-slate-800 rounded-sm overflow-hidden bg-white"
-                      renderTextLayer={false}
-                      renderAnnotationLayer={false}
-                      width={560}
-                    />
-                  </Document>
+                    {/* Native fallback structure if embedded runtime rendering errors out */}
+                    <div className="w-[500px] bg-white p-8 border border-slate-200 rounded-xl text-center shadow-md flex flex-col items-center justify-center mx-auto">
+                      <FileText className="w-12 h-12 text-blue-600 mb-3" />
+                      <h4 className="font-semibold text-slate-800 text-sm mb-1">Inline Preview Interrupted</h4>
+                      <p className="text-xs text-slate-400 mb-4 max-w-xs">Your system browser context requires launching this source file explicitly:</p>
+                      <a 
+                        href={task.document.storageUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium text-xs rounded-lg shadow"
+                      >
+                        Open Secure View Panel
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </object>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={task.document.storageUrl}
-                    alt="Document Content View"
-                    className="max-w-none shadow-2xl bg-white border border-slate-800 rounded-sm"
-                    style={{ width: 680 }}
+                    alt="Document Asset View"
+                    className="max-w-full max-h-full object-contain shadow-md bg-white border border-slate-300 rounded-sm"
                   />
                 )}
               </div>
@@ -333,19 +291,18 @@ export default function WorkspacePage() {
 
           {/* Instructions */}
           {task.instructions && (
-            <div className="p-3 bg-amber-50 border-t border-amber-200 text-xs text-amber-900 shadow-md shrink-0 select-text">
-              <span className="font-bold tracking-wide uppercase text-[10px] text-amber-700 block mb-0.5">Special Instructions:</span> 
-              {task.instructions}
+            <div className="p-3 bg-yellow-50 border-t border-yellow-200 text-xs text-yellow-800 shrink-0">
+              <span className="font-semibold">Instructions:</span> {task.instructions}
             </div>
           )}
         </div>
 
         {/* Right: Text editor */}
         <div className="w-1/2 flex flex-col bg-white select-text">
-          <div className="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 gap-4 shrink-0 select-none">
-            <span className="text-xs text-slate-600 font-semibold tracking-wider uppercase">Transcription Canvas</span>
+          <div className="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 gap-4 shrink-0">
+            <span className="text-xs text-slate-500 font-medium">Transcription</span>
             <div className="flex-1" />
-            <span className="text-xs font-mono text-slate-400">{charCount} chars</span>
+            <span className="text-xs text-slate-400">{charCount} chars</span>
             {isCompleted && (
               <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                 {task.status.replace("_", " ")}
@@ -360,12 +317,12 @@ export default function WorkspacePage() {
             placeholder="Start typing the digitized content here...
 
 Transcribe the document exactly as written, preserving formatting where possible. Use Enter for paragraph breaks."
-            className="flex-1 p-6 text-[13.5px] text-slate-800 leading-relaxed resize-none focus:outline-none font-mono disabled:bg-slate-50 disabled:text-slate-500 selection:bg-blue-100"
-            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+            className="flex-1 p-5 text-sm text-slate-800 leading-relaxed resize-none focus:outline-none font-mono disabled:bg-slate-50 disabled:text-slate-500"
+            style={{ fontFamily: "'Courier New', Courier, monospace" }}
           />
 
           {/* Bottom stats bar */}
-          <div className="h-8 bg-slate-50 border-t border-slate-200 flex items-center px-4 gap-4 text-xs font-mono text-slate-400 shrink-0 select-none">
+          <div className="h-8 bg-slate-50 border-t border-slate-200 flex items-center px-4 gap-4 text-xs text-slate-400 shrink-0">
             <span>{wordCount} words</span>
             <span>·</span>
             <span>{charCount} characters</span>
@@ -383,7 +340,7 @@ Transcribe the document exactly as written, preserving formatting where possible
 
       {/* Submit confirm modal */}
       {submitConfirm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl">
             <h3 className="font-semibold text-slate-900 mb-2">Submit for Review?</h3>
             <p className="text-sm text-slate-500 mb-5">
