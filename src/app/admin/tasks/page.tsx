@@ -32,6 +32,16 @@ interface Task {
 }
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      {children}
+    </div>
+  );
+}
 
 // ── Create Task Modal ─────────────────────────────────────────────────────────
 function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
@@ -74,14 +84,6 @@ function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     }
   }
 
-  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
-      {children}
-    </div>
-  );
-  const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
-
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
@@ -92,49 +94,49 @@ function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[76vh] overflow-y-auto">
           {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
 
-          <F label="Title *">
+          <Field label="Title *">
             <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
               className={inputCls} placeholder="e.g. Digitize 1947 Land Records" />
-          </F>
-          <F label="Document *">
+          </Field>
+          <Field label="Document *">
             <select required value={form.documentId}
               onChange={e => setForm(f => ({ ...f, documentId: e.target.value }))} className={inputCls}>
               <option value="">Select document…</option>
               {docsRes?.data?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
-          </F>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <F label="Priority">
+            <Field label="Priority">
               <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} className={inputCls}>
                 {PRIORITIES.map(p => <option key={p}>{p}</option>)}
               </select>
-            </F>
-            <F label="Deadline">
+            </Field>
+            <Field label="Deadline">
               <input type="date" value={form.deadline}
                 onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} className={inputCls} />
-            </F>
+            </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <F label="Payment (₹)">
+            <Field label="Payment (₹)">
               <input type="number" min={0} value={form.paymentAmount}
                 onChange={e => setForm(f => ({ ...f, paymentAmount: Number(e.target.value) }))} className={inputCls} />
-            </F>
-            <F label="Est. Pages">
+            </Field>
+            <Field label="Est. Pages">
               <input type="number" min={0} value={form.estimatedPages}
                 onChange={e => setForm(f => ({ ...f, estimatedPages: Number(e.target.value) }))} className={inputCls} />
-            </F>
+            </Field>
           </div>
-          <F label="Assign to Worker">
+          <Field label="Assign to Worker">
             <select value={form.workerId} onChange={e => setForm(f => ({ ...f, workerId: e.target.value }))} className={inputCls}>
               <option value="">Unassigned</option>
               {workersRes?.data?.map((w: any) => <option key={w.id} value={w.id}>{w.name} ({w.email})</option>)}
             </select>
-          </F>
-          <F label="Instructions">
+          </Field>
+          <Field label="Instructions">
             <textarea value={form.instructions} onChange={e => setForm(f => ({ ...f, instructions: e.target.value }))}
               rows={3} className={`${inputCls} resize-none`}
               placeholder="Special instructions for the worker…" />
-          </F>
+          </Field>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
@@ -322,7 +324,7 @@ export default function TasksPage() {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/tasks/${id}`).then(r => r.json()),
+    mutationFn: (id: string) => api.delete(`/tasks/${id}`).then(r => apiJson(r)),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tasks"] }); toast("Task deleted", "info"); },
     onError: (e: any) => toast(e.message, "error"),
   });

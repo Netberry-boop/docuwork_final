@@ -131,16 +131,30 @@ export const DELETE = withAuth(
     if (!task) return err("Task not found", 404);
 
     try {
-      await db.$transaction([
-        db.task.delete({ where: { id } }),
-        db.auditLog.create({
+      await db.$transaction(async (tx) => {
+        await tx.review.deleteMany({
+          where: { submission: { taskId: id } },
+        });
+
+        await tx.task.update({
+          where: { id },
+          data: { activeSubmissionId: null },
+        });
+
+        await tx.submission.deleteMany({ where: { taskId: id } });
+        await tx.notification.deleteMany({ where: { taskId: id } });
+        await tx.message.deleteMany({ where: { taskId: id } });
+        await tx.auditLog.deleteMany({ where: { taskId: id } });
+        await tx.task.delete({ where: { id } });
+
+        await tx.auditLog.create({
           data: { 
             userId: user!.id, 
-            taskId: id, 
-            action: "TASK_DELETED" 
+            action: "TASK_DELETED",
+            details: { taskId: id, title: task.title },
           },
-        }),
-      ]);
+        });
+      });
     } catch (error) {
       console.error("Task deletion failed:", error);
       return err("Failed to delete task", 500);
