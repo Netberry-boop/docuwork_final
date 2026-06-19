@@ -12,7 +12,12 @@ const transporter = nodemailer.createTransport({
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 const FROM = process.env.SMTP_FROM!;
 
+export function isEmailConfigured() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && FROM);
+}
+
 export async function sendVerificationEmail(email: string, token: string) {
+  if (!isEmailConfigured()) return;
   const link = `${APP_URL}/verify-email?token=${token}`;
   await transporter.sendMail({
     from: FROM,
@@ -27,6 +32,7 @@ export async function sendVerificationEmail(email: string, token: string) {
 }
 
 export async function sendPasswordResetEmail(email: string, token: string) {
+  if (!isEmailConfigured()) return;
   const link = `${APP_URL}/reset-password?token=${token}`;
   await transporter.sendMail({
     from: FROM,
@@ -46,6 +52,7 @@ export async function sendTaskAssignedEmail(
   taskTitle: string,
   taskId: string
 ) {
+  if (!isEmailConfigured()) return;
   const link = `${APP_URL}/worker/workspace/${taskId}`;
   await transporter.sendMail({
     from: FROM,

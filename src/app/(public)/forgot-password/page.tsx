@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { api, apiJson } from "@/lib/client";
 import { FileText, Loader2, ArrowLeft, CheckCircle } from "lucide-react";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,8 +21,12 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      if (data.success) setSent(true);
-      else setError(data.error || "Something went wrong");
+      if (data.success) {
+        setMessage(data.data?.message || "If an account exists, a reset request was created.");
+        setSent(true);
+      } else {
+        setError(data.error || "Something went wrong");
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -44,9 +48,9 @@ export default function ForgotPasswordPage() {
           {sent ? (
             <div className="text-center">
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-900 mb-2">Check your email</h2>
+              <h2 className="text-xl font-semibold text-slate-900 mb-2">Reset request received</h2>
               <p className="text-sm text-slate-500 mb-6">
-                If an account exists for <strong>{email}</strong>, we've sent a password reset link.
+                {message || <>If an account exists for <strong>{email}</strong>, a reset request was created.</>}
               </p>
               <Link href="/login" className="text-sm text-blue-600 hover:underline">
                 ← Back to login
@@ -55,7 +59,9 @@ export default function ForgotPasswordPage() {
           ) : (
             <>
               <h2 className="text-xl font-semibold text-slate-900 mb-2">Reset your password</h2>
-              <p className="text-sm text-slate-500 mb-6">Enter your email and we'll send you a reset link.</p>
+              <p className="text-sm text-slate-500 mb-6">
+                Enter your email. If mail is unavailable, a super admin can approve the reset request.
+              </p>
 
               {error && (
                 <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
@@ -71,7 +77,7 @@ export default function ForgotPasswordPage() {
                 <button type="submit" disabled={loading}
                   className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg font-medium text-sm transition flex items-center justify-center gap-2">
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Send Reset Link
+                  Request Password Reset
                 </button>
               </form>
 
