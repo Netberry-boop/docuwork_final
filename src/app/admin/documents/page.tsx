@@ -42,6 +42,9 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [files, setFiles] = useState<{ file: File; name: string; status: "pending" | "uploading" | "done" | "error"; error?: string }[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [showText, setShowText] = useState(false);
+  const [textValue, setTextValue] = useState("");
+  const [textName, setTextName] = useState("");
 
   function addFiles(incoming: FileList | null) {
     if (!incoming) return;
@@ -75,6 +78,21 @@ function UploadModal({ onClose }: { onClose: () => void }) {
     qc.invalidateQueries({ queryKey: ["documents"] });
   }
 
+  async function createFromText() {
+    if (!textValue.trim()) return;
+    try {
+      const res = await api.post("/documents", { text: textValue, name: textName || "Pasted Document" });
+      await apiJson(res);
+      setTextValue("");
+      setTextName("");
+      setShowText(false);
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      toast("Document created", "success");
+    } catch (e: any) {
+      toast(e?.message || "Failed to create document", "error");
+    }
+  }
+
   const hasPending = files.some(f => f.status === "pending");
   const allDone = files.length > 0 && files.every(f => f.status === "done");
 
@@ -87,6 +105,34 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowText(false)}
+              className={cn("px-3 py-1 rounded-lg text-sm", !showText ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700")}>
+              Upload Files
+            </button>
+            <button onClick={() => setShowText(true)}
+              className={cn("px-3 py-1 rounded-lg text-sm", showText ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700")}>
+              Paste Text
+            </button>
+          </div>
+
+          {/* Text paste panel */}
+          {showText && (
+            <div className="space-y-2">
+              <input value={textName} onChange={e => setTextName(e.target.value)} placeholder="Document name"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+              <textarea value={textValue} onChange={e => setTextValue(e.target.value)} rows={8}
+                placeholder="Paste or type document text here..."
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none" />
+              <div className="flex gap-3">
+                <button onClick={() => { setShowText(false); setTextValue(""); setTextName(""); }}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition">Cancel</button>
+                <button onClick={createFromText} disabled={!textValue.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition">Create Document</button>
+              </div>
+            </div>
+          )}
+
           {/* Drop zone */}
           <div
             onDragOver={e => { e.preventDefault(); setDragging(true); }}

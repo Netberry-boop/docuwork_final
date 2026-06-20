@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type MouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiJson, apiData } from "@/lib/client";
@@ -22,6 +22,7 @@ export default function WorkspacePage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [zoom, setZoom] = useState(100);
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [docText, setDocText] = useState<string | null>(null);
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [issueText, setIssueText] = useState("");
   const [showIssue, setShowIssue] = useState(false);
@@ -113,6 +114,29 @@ export default function WorkspacePage() {
   useEffect(() => {
     setPreviewFailed(false);
   }, [task?.document?.storageUrl]);
+
+  // Fetch inline text documents (data URLs or text URLs) and render them securely
+  useEffect(() => {
+    let mounted = true;
+    async function loadText() {
+      try {
+        const ft = String(task?.document?.fileType || "").toLowerCase();
+        const url = task?.document?.storageUrl;
+        if (!url) { setDocText(null); return; }
+        if (ft.includes("text") || (String(url || "").startsWith("data:text/plain"))) {
+          const resp = await fetch(url);
+          const txt = await resp.text();
+          if (mounted) setDocText(txt);
+        } else {
+          if (mounted) setDocText(null);
+        }
+      } catch (e) {
+        if (mounted) setDocText(null);
+      }
+    }
+    loadText();
+    return () => { mounted = false; };
+  }, [task?.document?.storageUrl, task?.document?.fileType]);
 
   const submitMutation = useMutation({
     mutationFn: () =>
@@ -325,6 +349,19 @@ export default function WorkspacePage() {
                     className="max-w-full max-h-full object-contain shadow-md bg-white border border-slate-300 rounded-sm"
                     onError={() => setPreviewFailed(true)}
                   />
+                ) : docText ? (
+                  <div className="w-full max-w-3xl bg-white p-6 border border-slate-200 rounded-xl shadow-inner overflow-auto">
+                    <div
+                      onCopy={e => e.preventDefault()}
+                      onContextMenu={e => e.preventDefault()}
+                      onMouseDown={(e: MouseEvent<HTMLDivElement>) => e.preventDefault()}
+                      style={{ userSelect: "none", WebkitUserSelect: "none" }}
+                      className="whitespace-pre-wrap text-sm font-mono text-slate-800 leading-relaxed"
+                    >
+                      {docText}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">Viewing only — copying is disabled for this document.</p>
+                  </div>
                 ) : (
                   <div className="w-[450px] bg-white p-8 border border-slate-200 rounded-xl text-center shadow-lg">
                     <FileText className="w-12 h-12 text-blue-600 mx-auto mb-3" />

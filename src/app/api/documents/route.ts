@@ -40,6 +40,43 @@ export const GET = withAuth(async (req, user) => {
 // POST /api/documents - multipart upload
 export const POST = withAuth(async (req, user) => {
   try {
+    const contentType = req.headers.get("content-type") || "";
+
+    // Accept JSON body for pasted text documents
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      const text = String(body?.text || "");
+      const name = String(body?.name || "Pasted Document").trim() || "Pasted Document";
+
+      if (!text || text.trim().length === 0) return err("No text provided", 400);
+
+      // store as data URL so existing fields remain unchanged
+      const buffer = Buffer.from(text, "utf-8");
+      const dataUrl = `data:text/plain;base64,${buffer.toString("base64")}`;
+
+      const doc = await db.document.create({
+        data: {
+          name,
+          originalName: `${name}.txt`,
+          fileType: "text/plain",
+          fileSize: buffer.length,
+          storageUrl: dataUrl,
+          uploadedById: user!.id,
+        },
+      });
+
+      await db.auditLog.create({
+        data: {
+          userId: user!.id,
+          action: "DOCUMENT_UPLOADED",
+          details: { documentId: doc.id, name: doc.name },
+        },
+      });
+
+      return ok(doc, 201);
+    }
+
+    // Fallback: multipart file upload (existing behavior)
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 

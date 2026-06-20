@@ -65,6 +65,22 @@ export const POST = withAuth(
     if (!parsed.success) return err(parsed.error.errors[0].message, 400);
 
     try {
+      // Prevent workers from copying the source document text when the document was created from pasted text
+      const parentDoc = await db.document.findUnique({ where: { id: task.documentId } });
+      if (parentDoc && String(parentDoc.fileType || "").toLowerCase().includes("text") && parentDoc.storageUrl?.startsWith("data:text/plain;base64,")) {
+        try {
+          const b64 = parentDoc.storageUrl.split(",")[1] || "";
+          const docText = Buffer.from(b64, "base64").toString("utf-8");
+          const sample = docText.slice(0, Math.min(200, docText.length)).trim();
+          const submitted = parsed.data.content || "";
+          if (sample.length > 20 && submitted.includes(sample)) {
+            return err("Copying from the source document is not allowed", 400);
+          }
+        } catch (e) {
+          // ignore decoding errors and continue
+        }
+      }
+
       // ✨ FIX: Wrap related operations in an atomic transaction
       const result = await db.$transaction(async (tx) => {
         // Find the sequence value for the versioning counter
