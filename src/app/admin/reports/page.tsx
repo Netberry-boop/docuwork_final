@@ -39,6 +39,7 @@ export default function ReportsPage() {
 
   const summaryStats = [
     { label: "Total Tasks", value: data?.totalTasks || 0 },
+    { label: "Submitted", value: data?.submittedTasks || 0 },
     { label: "Completed", value: data?.completedTasks || 0 },
     { label: "Completion Rate", value: data?.totalTasks ? `${Math.round((data.completedTasks / data.totalTasks) * 100)}%` : "0%" },
     { label: "Active Workers", value: data?.activeWorkers || 0 },
@@ -84,13 +85,38 @@ export default function ReportsPage() {
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           {summaryStats.map(s => (
             <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4 text-center">
               <p className="text-xl font-bold text-slate-900">{s.value}</p>
               <p className="text-xs text-slate-400 mt-0.5">{s.label}</p>
             </div>
           ))}
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200">
+          <div className="p-5 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-800">Recent Final Submissions</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {(data?.recentSubmissions || []).length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-sm">No final submissions yet</div>
+            ) : (
+              data.recentSubmissions.map((s: any) => (
+                <div key={s.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900 truncate">{s.task.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {s.worker?.name || "Worker"} · {s.wordCount} words · {s.task.document.name}
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+                    {s.task.status.replace("_", " ")}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Charts */}

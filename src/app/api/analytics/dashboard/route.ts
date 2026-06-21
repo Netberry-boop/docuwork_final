@@ -54,6 +54,7 @@ export const GET = withAuth(async (req, user) => {
     activeWorkers,
     taskStats,
     recentTasks,
+    recentSubmissions,
     totalPayments,
   ] = await Promise.all([
     db.user.count({ where: workerWhere }),
@@ -66,6 +67,25 @@ export const GET = withAuth(async (req, user) => {
       include: {
         worker: { select: { id: true, name: true } },
         document: { select: { name: true } },
+      },
+    }),
+    db.submission.findMany({
+      where: {
+        isDraft: false,
+        ...(user!.role === Role.MANAGER ? { task: { createdById: user!.id } } : {}),
+      },
+      take: 10,
+      orderBy: { createdAt: "desc" },
+      include: {
+        worker: { select: { id: true, name: true } },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            document: { select: { name: true } },
+          },
+        },
       },
     }),
     db.payment.aggregate({ where: paymentWhere, _sum: { amount: true } }),
@@ -86,6 +106,7 @@ export const GET = withAuth(async (req, user) => {
     submittedTasks: taskMap.SUBMITTED || 0,
     totalPayout: totalPayments._sum.amount || 0,
     recentTasks,
+    recentSubmissions,
     tasksByStatus: taskMap,
   });
 });

@@ -87,7 +87,7 @@ export function getPagination(req: NextRequest) {
   const parsedLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const limit = Number.isFinite(parsedLimit)
-    ? Math.min(100, Math.max(1, parsedLimit))
+    ? Math.min(200, Math.max(1, parsedLimit))
     : 20;
   const skip = (page - 1) * limit;
   return { page, limit, skip };

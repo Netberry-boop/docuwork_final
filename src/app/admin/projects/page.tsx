@@ -73,13 +73,23 @@ export default function AdminProjectsPage() {
   });
 
   const projects = data?.data ?? [];
-  const documents = docsData?.data ?? [];
+  const documents = [...(docsData?.data ?? [])].sort((a: any, b: any) =>
+    new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare(
+      a.name || a.originalName || "",
+      b.name || b.originalName || ""
+    )
+  );
   const workers = workersData?.data ?? [];
 
   function toggleDocument(id: string) {
     setForm(current => {
       const has = current.documentIds.includes(id);
+      if (!has && current.documentIds.length >= 200) {
+        setError("A project can include up to 200 documents.");
+        return current;
+      }
       const next = has ? current.documentIds.filter(docId => docId !== id) : [...current.documentIds, id];
+      if (next.length <= 200) setError("");
       return { ...current, documentIds: next };
     });
   }
@@ -172,20 +182,26 @@ export default function AdminProjectsPage() {
                     <p className="text-sm text-slate-400">No documents available.</p>
                   ) : (
                     <div className="grid gap-2">
-                      {documents.slice(0, 200).map((doc: any) => (
+                      {documents.slice(0, 200).map((doc: any, index: number) => {
+                        const checked = form.documentIds.includes(doc.id);
+                        const disabled = !checked && form.documentIds.length >= 200;
+                        return (
                         <label key={doc.id} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 cursor-pointer hover:border-blue-300 transition">
                           <input
                             type="checkbox"
-                            checked={form.documentIds.includes(doc.id)}
+                            checked={checked}
+                            disabled={disabled}
                             onChange={() => toggleDocument(doc.id)}
                             className="h-4 w-4 text-blue-600 border-slate-300 rounded"
                           />
+                          <span className="w-8 shrink-0 text-right text-xs font-mono text-slate-400">{index + 1}</span>
                           <div className="min-w-0 text-sm">
                             <p className="font-medium text-slate-900 truncate">{doc.name}</p>
                             <p className="text-xs text-slate-400">Uploaded by {doc.uploadedBy?.name ?? "you"}</p>
                           </div>
                         </label>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -72,6 +72,10 @@ export const POST = withAuth(async (req, user) => {
   let documents: Array<{ id: string; name: string; uploadedById: string }> = [];
 
   if (documentIds.length > 0) {
+    if (documentIds.length > 200) {
+      return err("A project can include up to 200 documents", 400);
+    }
+
     documents = await db.document.findMany({
       where: { id: { in: documentIds } },
       select: { id: true, name: true, uploadedById: true },
@@ -87,6 +91,9 @@ export const POST = withAuth(async (req, user) => {
         return err("Some documents were not found", 404);
       }
     }
+
+    const documentById = new Map(documents.map(doc => [doc.id, doc]));
+    documents = documentIds.map(id => documentById.get(id)!);
   }
 
   const project = await db.$transaction(async (tx) => {

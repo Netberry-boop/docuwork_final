@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiJson } from "@/lib/client";
 import AppShell from "@/components/shared/AppShell";
@@ -205,10 +205,112 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function DocumentPreviewModal({ doc, onClose }: { doc: Document; onClose: () => void }) {
+  const [textPreview, setTextPreview] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
+
+  const fileType = String(doc.fileType || "").toLowerCase();
+  const storageUrl = doc.storageUrl || "";
+  const fileName = `${doc.name || ""} ${doc.originalName || ""}`.toLowerCase();
+  const isText = fileType.includes("text") || storageUrl.startsWith("data:text/");
+  const isPdf = fileType.includes("pdf") || fileName.endsWith(".pdf") || /\.pdf($|[?#])/i.test(storageUrl);
+  const isImage = fileType.startsWith("image/") || /\.(png|jpe?g|webp|gif|tiff?)($|[?#])/i.test(storageUrl);
+  const isDocx = fileType.includes("wordprocessingml") || fileType.includes("msword") || /\.(docx?|rtf)($|[?#])/i.test(fileName);
+  const canUseOfficeViewer = isDocx && /^https:\/\//i.test(storageUrl) && !storageUrl.startsWith("data:");
+  const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(storageUrl)}`;
+
+  useEffect(() => {
+    let mounted = true;
+    setPreviewFailed(false);
+    setTextPreview(null);
+
+    if (!isText || !storageUrl) return;
+    fetch(storageUrl)
+      .then(res => res.text())
+      .then(text => {
+        if (mounted) setTextPreview(text);
+      })
+      .catch(() => {
+        if (mounted) setPreviewFailed(true);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isText, storageUrl]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] shadow-xl overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-slate-900 truncate">{doc.name}</h2>
+            <p className="text-xs text-slate-400 truncate">{doc.originalName}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {storageUrl && !storageUrl.startsWith("data:") && (
+              <a
+                href={storageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-700 hover:bg-slate-50 transition"
+              >
+                Open original
+              </a>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-[60vh] bg-slate-100 p-4 overflow-auto">
+          {isText && textPreview !== null ? (
+            <pre className="min-h-full whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-5 text-sm leading-relaxed text-slate-800">
+              {textPreview}
+            </pre>
+          ) : isImage && !previewFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={storageUrl}
+              alt={doc.name}
+              onError={() => setPreviewFailed(true)}
+              className="mx-auto max-h-[70vh] max-w-full rounded-lg border border-slate-200 bg-white object-contain shadow-sm"
+            />
+          ) : isPdf && !previewFailed ? (
+            <iframe
+              src={`${storageUrl}#toolbar=1&navpanes=0&view=FitH`}
+              title={doc.name}
+              onError={() => setPreviewFailed(true)}
+              className="h-[70vh] w-full rounded-lg border border-slate-200 bg-white shadow-sm"
+            />
+          ) : canUseOfficeViewer && !previewFailed ? (
+            <iframe
+              src={officeViewerUrl}
+              title={doc.name}
+              onError={() => setPreviewFailed(true)}
+              className="h-[70vh] w-full rounded-lg border border-slate-200 bg-white shadow-sm"
+            />
+          ) : (
+            <div className="h-[60vh] flex items-center justify-center">
+              <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                <FileText className="w-12 h-12 text-blue-600 mx-auto mb-3" />
+                <h3 className="font-semibold text-slate-800 text-sm mb-1">Preview unavailable</h3>
+                <p className="text-xs text-slate-400">
+                  This file cannot be rendered inline here. Use the original file link if it is available.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [showUpload, setShowUpload] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
@@ -294,10 +396,10 @@ export default function DocumentsPage() {
                   <td className="px-4 py-3 text-sm text-slate-500">{formatDate(doc.createdAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <a href={doc.storageUrl} target="_blank" rel="noopener noreferrer"
+                      <button type="button" onClick={() => setPreviewDoc(doc)}
                         className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-400 hover:text-blue-600 text-xs">
                         View
-                      </a>
+                      </button>
                       <button onClick={() => {
                         if (doc._count.tasks > 0) { toast("Cannot delete: document has tasks", "error"); return; }
                         if (confirm("Delete this document?")) deleteMutation.mutate(doc.id);
@@ -327,6 +429,7 @@ export default function DocumentsPage() {
       </div>
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {previewDoc && <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
     </AppShell>
   );
 }

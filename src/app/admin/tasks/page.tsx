@@ -398,7 +398,7 @@ export default function TasksPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  {["Task", "Worker", "Status", "Priority", "Deadline", "Payment", "Actions"].map(h => (
+                  {["Task", "Worker", "Project", "Status", "Priority", "Deadline", "Payment", "Actions"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                   ))}
                 </tr>
