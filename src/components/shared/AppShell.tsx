@@ -16,6 +16,7 @@ import { cn, timeAgo } from "@/lib/utils";
 const adminNav = [
   { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/workers", icon: Users, label: "Workers" },
+  { href: "/admin/projects", icon: FileStack, label: "Projects" },
   { href: "/admin/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/admin/documents", icon: FileStack, label: "Documents" },
   { href: "/admin/reports", icon: BarChart2, label: "Reports" },

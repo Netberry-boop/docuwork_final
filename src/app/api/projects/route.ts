@@ -8,6 +8,7 @@ const createProjectSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   workerId: z.string().optional(),
+  documentIds: z.array(z.string()).max(200).optional(),
 });
 
 export const GET = withAuth(async (req, user) => {
@@ -67,16 +68,67 @@ export const POST = withAuth(async (req, user) => {
     }
   }
 
-  const project = await db.project.create({
-    data: {
-      title: data.title,
-      description: data.description,
-      managerId: user.id,
-      workerId: data.workerId || undefined,
-    },
-    include: {
-      worker: { select: { id: true, name: true, email: true } },
-    },
+  const documentIds = data.documentIds ? Array.from(new Set(data.documentIds)) : [];
+  let documents: Array<{ id: string; name: string; uploadedById: string }> = [];
+
+  if (documentIds.length > 0) {
+    documents = await db.document.findMany({
+      where: { id: { in: documentIds } },
+      select: { id: true, name: true, uploadedById: true },
+    });
+
+    if (documents.length !== documentIds.length) {
+      return err("Some documents were not found", 400);
+    }
+
+    if (user.role === Role.MANAGER) {
+      const unauthorized = documents.some(doc => doc.uploadedById !== user.id);
+      if (unauthorized) {
+        return err("Some documents were not found", 404);
+      }
+    }
+  }
+
+  const project = await db.$transaction(async (tx) => {
+    const createdProject = await tx.project.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        managerId: user.id,
+        workerId: data.workerId || undefined,
+      },
+      include: {
+        worker: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (documents.length > 0) {
+      await tx.task.createMany({
+        data: documents.map((doc, index) => ({
+          title: `${createdProject.title} — ${doc.name}`,
+          documentId: doc.id,
+          projectId: createdProject.id,
+          workerId: data.workerId || undefined,
+          pageNumber: index + 1,
+          createdById: user.id,
+          status: "ASSIGNED",
+          paymentAmount: 0,
+        })),
+      });
+    }
+
+    if (createdProject.workerId && documents.length > 0) {
+      await tx.notification.create({
+        data: {
+          userId: createdProject.workerId,
+          type: "TASK_ASSIGNED",
+          title: `Project assigned: ${createdProject.title}`,
+          body: `${documents.length} documents have been assigned to you as part of this project.`,
+        },
+      });
+    }
+
+    return createdProject;
   });
 
   return ok(project, 201);

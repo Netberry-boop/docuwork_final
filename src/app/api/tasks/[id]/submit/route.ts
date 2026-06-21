@@ -81,16 +81,14 @@ export const POST = withAuth(
         }
       }
 
-      // ✨ FIX: Wrap related operations in an atomic transaction
+      // ✨ Fix: Wrap related operations in an atomic transaction and return the next project task
       const result = await db.$transaction(async (tx) => {
-        // Find the sequence value for the versioning counter
         const last = await tx.submission.findFirst({
           where: { taskId: task.id, workerId: user!.id },
           orderBy: { version: "desc" },
         });
         const nextVersion = (last?.version ?? 0) + 1;
 
-        // Create the new submission snapshot
         const newSubmission = await tx.submission.create({
           data: {
             taskId: task.id,
@@ -104,8 +102,7 @@ export const POST = withAuth(
           },
         });
 
-        // Track the forward reference on parent task and update progress states
-        await tx.task.update({
+        const updatedTask = await tx.task.update({
           where: { id: task.id },
           data: {
             status: parsed.data.isDraft ? "IN_PROGRESS" : "SUBMITTED",
@@ -113,7 +110,23 @@ export const POST = withAuth(
           },
         });
 
-        return newSubmission;
+        let nextTask = null;
+        if (!parsed.data.isDraft && task.projectId) {
+          nextTask = await tx.task.findFirst({
+            where: {
+              projectId: task.projectId,
+              workerId: user!.id,
+              status: { in: ["ASSIGNED", "IN_PROGRESS"] },
+              id: { not: task.id },
+            },
+            orderBy: [
+              { pageNumber: "asc" },
+              { createdAt: "asc" },
+            ],
+          });
+        }
+
+        return { newSubmission, nextTaskId: nextTask?.id || null, updatedTask };
       });
 
       return ok(result, 201);
