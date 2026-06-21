@@ -13,6 +13,8 @@ const createTaskSchema = z.object({
   estimatedPages: z.number().optional(),
   paymentAmount: z.number().default(0),
   documentId: z.string(),
+  projectId: z.string().optional(),
+  pageNumber: z.number().int().positive().optional(),
   workerId: z.string().optional(),
   instructions: z.string().optional(),
 });
@@ -23,6 +25,8 @@ export const GET = withAuth(async (req, user) => {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") as TaskStatus | null;
   const workerId = searchParams.get("workerId");
+  const projectId = searchParams.get("projectId");
+  const sort = searchParams.get("sort") || "";
   const search = searchParams.get("search") || "";
 
   const where: Record<string, unknown> = {};
@@ -37,6 +41,7 @@ export const GET = withAuth(async (req, user) => {
   }
 
   if (status) where.status = status;
+  if (projectId) where.projectId = projectId;
   if (search) {
     where.OR = [
       { title: { contains: search, mode: "insensitive" } },
@@ -44,15 +49,20 @@ export const GET = withAuth(async (req, user) => {
     ];
   }
 
+  const orderBy = sort === "pageNumber"
+    ? ({ pageNumber: "asc" } as const)
+    : ({ createdAt: "desc" } as const);
+
   const [tasks, total] = await Promise.all([
     db.task.findMany({
       where,
       skip,
       take: limit,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       include: {
         worker: { select: { id: true, name: true, email: true, avatar: true } },
         document: { select: { id: true, name: true, fileType: true, thumbnailUrl: true } },
+        project: { select: { id: true, title: true } },
         createdBy: { select: { id: true, name: true } },
         _count: { select: { submissions: true } },
       },
@@ -81,6 +91,23 @@ export const POST = withAuth(async (req, user) => {
     return err("Document not found", 404);
   }
 
+  let project = null;
+  if (data.projectId) {
+    project = await db.project.findUnique({
+      where: { id: data.projectId },
+      select: { id: true, managerId: true, workerId: true },
+    });
+    if (!project) {
+      return err("Project not found", 404);
+    }
+    if (user.role === Role.MANAGER && project.managerId !== user.id) {
+      return err("Project not found", 404);
+    }
+    if (!data.workerId && project.workerId) {
+      data.workerId = project.workerId;
+    }
+  }
+
   if (data.workerId) {
     const worker = await db.user.findUnique({
       where: { id: data.workerId },
@@ -100,10 +127,12 @@ export const POST = withAuth(async (req, user) => {
       deadline: data.deadline ? new Date(data.deadline) : undefined,
       createdById: user.id,
       status: data.workerId ? "ASSIGNED" : "ASSIGNED",
+      projectId: data.projectId || undefined,
     },
     include: {
       worker: { select: { id: true, name: true, email: true } },
       document: true,
+      project: { select: { id: true, title: true } },
     },
   });
 

@@ -146,10 +146,14 @@ export default function WorkspacePage() {
         charCount,
         timeSpentSec: timeSpent,
         isDraft: false,
-      }).then(r => apiJson(r)),
-    onSuccess: () => {
+      }).then(r => apiJson<any>(r)),
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["task", id] });
-      router.push("/worker/tasks");
+      if (data?.data?.nextTaskId) {
+        router.push(`/worker/workspace/${data.data.nextTaskId}`);
+      } else {
+        router.push("/worker/tasks");
+      }
     },
   });
 

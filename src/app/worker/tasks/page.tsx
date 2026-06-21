@@ -20,6 +20,7 @@ interface Task {
   deadline?: string;
   paymentAmount: number;
   document: { name: string; fileType: string };
+  project?: { title: string };
   estimatedPages?: number;
   createdAt: string;
 }
@@ -113,6 +114,9 @@ export default function WorkerTasksPage() {
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span className="text-xs text-slate-500 truncate">{task.document.name}</span>
+                {task.project && (
+                  <span className="text-xs text-slate-400 truncate">· {task.project.title}</span>
+                )}
               </div>
 
               {task.description && (

@@ -35,6 +35,7 @@ export const GET = withAuth(async (req, user, { params }) => {
       worker: { select: { id: true, name: true, email: true, avatar: true } },
       createdBy: { select: { id: true, name: true } },
       document: true,
+      project: { select: { id: true, title: true } },
       submissions: {
         orderBy: { version: "desc" },
         take: 5,

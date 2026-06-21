@@ -21,6 +21,8 @@ interface Task {
   paymentAmount: number;
   worker?: { id: string; name: string };
   document: { id: string; name: string; storageUrl: string; fileType: string };
+  project?: { id: string; title: string };
+  pageNumber?: number;
   createdAt: string;
   _count: { submissions: number };
   submissions?: Array<{
@@ -47,8 +49,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
     title: "", description: "", priority: "MEDIUM",
-    deadline: "", paymentAmount: 0, documentId: "", workerId: "",
-    instructions: "", estimatedPages: 0,
+    deadline: "", paymentAmount: 0, documentId: "", projectId: "", workerId: "",
+    instructions: "", estimatedPages: 0, pageNumber: 0,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -61,6 +63,10 @@ function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     queryKey: ["workers-select"],
     queryFn: () => api.get("/workers?limit=100").then(r => apiJson<any>(r)),
   });
+  const { data: projectsRes } = useQuery({
+    queryKey: ["projects-select"],
+    queryFn: () => api.get("/projects?limit=100").then(r => apiJson<any>(r)),
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,6 +76,8 @@ function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         ...form,
         paymentAmount: Number(form.paymentAmount),
         estimatedPages: Number(form.estimatedPages) || undefined,
+        projectId: form.projectId || undefined,
+        pageNumber: form.pageNumber > 0 ? Number(form.pageNumber) : undefined,
         workerId: form.workerId || undefined,
         deadline: form.deadline || undefined,
       });
@@ -104,6 +112,22 @@ function CreateTaskModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               <option value="">Select document…</option>
               {docsRes?.data?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
+          </Field>
+          <Field label="Project">
+            <select value={form.projectId}
+              onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))} className={inputCls}>
+              <option value="">No project</option>
+              {projectsRes?.data?.map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}{p.worker ? ` — ${p.worker.name}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Page number">
+            <input type="number" min={1} value={form.pageNumber}
+              onChange={e => setForm(f => ({ ...f, pageNumber: Number(e.target.value) }))}
+              className={inputCls} placeholder="Optional page order" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Priority">
@@ -381,12 +405,12 @@ export default function TasksPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {isLoading && (
-                  <tr><td colSpan={7} className="text-center py-12">
+                  <tr><td colSpan={8} className="text-center py-12">
                     <Loader2 className="w-6 h-6 text-blue-500 animate-spin mx-auto" />
                   </td></tr>
                 )}
                 {!isLoading && tasks.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-sm">No tasks found</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No tasks found</td></tr>
                 )}
                 {tasks.map(task => (
                   <tr key={task.id} className="hover:bg-slate-50 transition">
@@ -396,6 +420,9 @@ export default function TasksPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">
                       {task.worker?.name ?? <span className="text-slate-400 italic">Unassigned</span>}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {task.project ? <span className="text-slate-700">{task.project.title}</span> : <span className="text-slate-400">No project</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[task.status] ?? ""}`}>
