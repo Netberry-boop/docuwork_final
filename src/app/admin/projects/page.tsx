@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiJson } from "@/lib/client";
 import AppShell from "@/components/shared/AppShell";
 import { toast } from "@/components/ui/toaster";
-import { Loader2, FilePlus, FileText, CheckCircle, Search } from "lucide-react";
+import { Loader2, FilePlus, CheckCircle, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 function fieldClass() {
@@ -19,7 +19,6 @@ export default function AdminProjectsPage() {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    workerId: "",
     documentIds: [] as string[],
   });
   const [error, setError] = useState("");
@@ -43,20 +42,11 @@ export default function AdminProjectsPage() {
     },
   });
 
-  const { data: workersData } = useQuery({
-    queryKey: ["workers-select"],
-    queryFn: async () => {
-      const res = await api.get("/workers?limit=200");
-      return apiJson<any>(res);
-    },
-  });
-
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await api.post("/projects", {
         title: form.title,
         description: form.description || undefined,
-        workerId: form.workerId || undefined,
         documentIds: form.documentIds,
       });
       return apiJson<any>(res);
@@ -64,7 +54,7 @@ export default function AdminProjectsPage() {
     onSuccess: () => {
       toast("Project created", "success");
       qc.invalidateQueries({ queryKey: ["projects"] });
-      setForm({ title: "", description: "", workerId: "", documentIds: [] });
+      setForm({ title: "", description: "", documentIds: [] });
       setError("");
     },
     onError: (err: any) => {
@@ -79,8 +69,6 @@ export default function AdminProjectsPage() {
       b.name || b.originalName || ""
     )
   );
-  const workers = workersData?.data ?? [];
-
   function toggleDocument(id: string) {
     setForm(current => {
       const has = current.documentIds.includes(id);
@@ -100,7 +88,7 @@ export default function AdminProjectsPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">Projects</h1>
-            <p className="text-sm text-slate-500 mt-1">Create and assign document projects to workers.</p>
+            <p className="text-sm text-slate-500 mt-1">Create document projects first, then assign them from Tasks.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
@@ -153,19 +141,6 @@ export default function AdminProjectsPage() {
                     className={fieldClass() + " resize-none h-24"}
                     placeholder="Optional project notes"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Assign to worker</label>
-                  <select
-                    value={form.workerId}
-                    onChange={e => setForm(f => ({ ...f, workerId: e.target.value }))}
-                    className={fieldClass()}
-                  >
-                    <option value="">Unassigned</option>
-                    {workers.map((worker: any) => (
-                      <option key={worker.id} value={worker.id}>{worker.name} ({worker.email})</option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
@@ -254,7 +229,8 @@ export default function AdminProjectsPage() {
               <thead>
                 <tr className="bg-slate-50 text-slate-500 uppercase text-xs tracking-wider">
                   <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Worker</th>
+                  <th className="px-4 py-3">Assigned Users</th>
+                  <th className="px-4 py-3">Documents</th>
                   <th className="px-4 py-3">Tasks</th>
                   <th className="px-4 py-3">Created</th>
                 </tr>
@@ -262,13 +238,13 @@ export default function AdminProjectsPage() {
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={4} className="py-10 text-center text-slate-400">
+                    <td colSpan={5} className="py-10 text-center text-slate-400">
                       <Loader2 className="w-6 h-6 mx-auto animate-spin" />
                     </td>
                   </tr>
                 ) : projects.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-10 text-center text-slate-400">No projects found.</td>
+                    <td colSpan={5} className="py-10 text-center text-slate-400">No projects found.</td>
                   </tr>
                 ) : (
                   projects.map((project: any) => (
@@ -277,7 +253,10 @@ export default function AdminProjectsPage() {
                         <div className="font-medium text-slate-900">{project.title}</div>
                         <div className="text-xs text-slate-400 mt-1 line-clamp-2">{project.description || "—"}</div>
                       </td>
-                      <td className="px-4 py-4 text-slate-600">{project.worker?.name ?? "Unassigned"}</td>
+                      <td className="px-4 py-4 text-slate-600">
+                        {project._count?.assignments ? `${project._count.assignments} users` : "Unassigned"}
+                      </td>
+                      <td className="px-4 py-4 text-slate-600">{project._count?.documents ?? 0}</td>
                       <td className="px-4 py-4 text-slate-600">{project._count?.tasks ?? 0}</td>
                       <td className="px-4 py-4 text-slate-600">{formatDate(project.createdAt)}</td>
                     </tr>

@@ -6,8 +6,8 @@ import { api, apiJson } from "@/lib/client";
 import AppShell from "@/components/shared/AppShell";
 import { STATUS_COLORS, PRIORITY_COLORS, formatDate, cn } from "@/lib/utils";
 import {
-  Plus, Search, Loader2, FileText, Trash2, Eye,
-  CheckCircle, XCircle, RotateCcw, Star
+  Plus, Search, Loader2, Trash2,
+  CheckCircle, XCircle, RotateCcw, Star, Users
 } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 
@@ -41,6 +41,157 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function AssignProjectModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    projectId: "",
+    workerIds: [] as string[],
+    priority: "MEDIUM",
+    deadline: "",
+    paymentAmount: 0,
+    instructions: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const { data: projectsRes } = useQuery({
+    queryKey: ["projects-assign-select"],
+    queryFn: () => api.get("/projects?limit=100").then(r => apiJson<any>(r)),
+  });
+  const { data: workersRes } = useQuery({
+    queryKey: ["workers-assign-select"],
+    queryFn: () => api.get("/workers?limit=200").then(r => apiJson<any>(r)),
+  });
+
+  const projects = projectsRes?.data ?? [];
+  const workers = workersRes?.data ?? [];
+
+  function toggleWorker(workerId: string) {
+    setForm(current => ({
+      ...current,
+      workerIds: current.workerIds.includes(workerId)
+        ? current.workerIds.filter(id => id !== workerId)
+        : [...current.workerIds, workerId],
+    }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.projectId || form.workerIds.length === 0) {
+      setError("Select a project and at least one worker.");
+      return;
+    }
+
+    setLoading(true); setError("");
+    try {
+      const res = await api.post(`/projects/${form.projectId}/assign`, {
+        workerIds: form.workerIds,
+        priority: form.priority,
+        deadline: form.deadline || undefined,
+        paymentAmount: Number(form.paymentAmount) || 0,
+        instructions: form.instructions || undefined,
+      });
+      const json = await apiJson<any>(res);
+      if (!json.success) throw new Error(json.error);
+      toast(`Project assigned. ${json.data?.createdTasks ?? 0} tasks created.`, "success");
+      onSuccess(); onClose();
+    } catch (err: any) {
+      setError(err.message || "Unable to assign project");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-xl shadow-xl overflow-hidden">
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">Assign Project</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Creates tasks for every document in the project.</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[76vh] overflow-y-auto">
+          {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
+
+          <Field label="Project *">
+            <select required value={form.projectId}
+              onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
+              className={inputCls}>
+              <option value="">Select project...</option>
+              {projects.map((project: any) => (
+                <option key={project.id} value={project.id}>
+                  {project.title} ({project._count?.documents ?? 0} docs)
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={`Workers * (${form.workerIds.length} selected)`}>
+            <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
+              {workers.length === 0 ? (
+                <p className="p-3 text-sm text-slate-400">No workers available.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {workers.map((worker: any) => (
+                    <label key={worker.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 cursor-pointer hover:border-blue-300 transition">
+                      <input
+                        type="checkbox"
+                        checked={form.workerIds.includes(worker.id)}
+                        onChange={() => toggleWorker(worker.id)}
+                        className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-slate-900 truncate">{worker.name}</span>
+                        <span className="block text-xs text-slate-400 truncate">{worker.email}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Priority">
+              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} className={inputCls}>
+                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="Deadline">
+              <input type="date" value={form.deadline}
+                onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} className={inputCls} />
+            </Field>
+          </div>
+
+          <Field label="Payment per task (₹)">
+            <input type="number" min={0} value={form.paymentAmount}
+              onChange={e => setForm(f => ({ ...f, paymentAmount: Number(e.target.value) }))}
+              className={inputCls} />
+          </Field>
+          <Field label="Instructions">
+            <textarea value={form.instructions} onChange={e => setForm(f => ({ ...f, instructions: e.target.value }))}
+              rows={3} className={`${inputCls} resize-none`}
+              placeholder="Instructions applied to each generated task..." />
+          </Field>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Assign Project
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -325,6 +476,7 @@ export default function TasksPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [showCreate, setShowCreate] = useState(false);
+  const [showAssignProject, setShowAssignProject] = useState(false);
   const [reviewTask, setReviewTask] = useState<Task | null>(null);
   const [page, setPage] = useState(1);
 
@@ -366,10 +518,16 @@ export default function TasksPage() {
             <h1 className="text-xl font-bold text-slate-900">Tasks</h1>
             <p className="text-sm text-slate-500 mt-0.5">{pagination?.total ?? 0} total tasks</p>
           </div>
-          <button onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
-            <Plus className="w-4 h-4" /> New Task
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowAssignProject(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition">
+              <Users className="w-4 h-4" /> Assign Project
+            </button>
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              <Plus className="w-4 h-4" /> New Task
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -477,6 +635,15 @@ export default function TasksPage() {
         <CreateTaskModal
           onClose={() => setShowCreate(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ["tasks"] })}
+        />
+      )}
+      {showAssignProject && (
+        <AssignProjectModal
+          onClose={() => setShowAssignProject(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ["tasks"] });
+            qc.invalidateQueries({ queryKey: ["projects"] });
+          }}
         />
       )}
       {reviewTask && (

@@ -7,7 +7,6 @@ import { z } from "zod";
 const createProjectSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  workerId: z.string().optional(),
   documentIds: z.array(z.string()).max(200).optional(),
 });
 
@@ -18,7 +17,7 @@ export const GET = withAuth(async (req, user) => {
 
   const where: Record<string, unknown> = {};
   if (user!.role === Role.WORKER) {
-    where.workerId = user!.id;
+    where.assignments = { some: { workerId: user!.id } };
   } else if (user!.role === Role.MANAGER) {
     where.managerId = user!.id;
   }
@@ -38,7 +37,11 @@ export const GET = withAuth(async (req, user) => {
       orderBy: { createdAt: "desc" },
       include: {
         worker: { select: { id: true, name: true, email: true } },
-        _count: { select: { tasks: true } },
+        assignments: {
+          include: { worker: { select: { id: true, name: true, email: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+        _count: { select: { tasks: true, documents: true, assignments: true } },
       },
     }),
     db.project.count({ where }),
@@ -55,19 +58,6 @@ export const POST = withAuth(async (req, user) => {
   if (!parsed.success) return err(parsed.error.message);
 
   const data = parsed.data;
-  if (data.workerId) {
-    const worker = await db.user.findUnique({
-      where: { id: data.workerId },
-      select: { id: true, role: true, managedById: true, isActive: true },
-    });
-    if (!worker || worker.role !== Role.WORKER || !worker.isActive) {
-      return err("Worker not found", 404);
-    }
-    if (user.role === Role.MANAGER && worker.managedById !== user.id) {
-      return err("Worker not found", 404);
-    }
-  }
-
   const documentIds = data.documentIds ? Array.from(new Set(data.documentIds)) : [];
   let documents: Array<{ id: string; name: string; uploadedById: string }> = [];
 
@@ -102,36 +92,19 @@ export const POST = withAuth(async (req, user) => {
         title: data.title,
         description: data.description,
         managerId: user.id,
-        workerId: data.workerId || undefined,
       },
       include: {
-        worker: { select: { id: true, name: true, email: true } },
+        _count: { select: { documents: true, assignments: true, tasks: true } },
       },
     });
 
     if (documents.length > 0) {
-      await tx.task.createMany({
+      await tx.projectDocument.createMany({
         data: documents.map((doc, index) => ({
-          title: `${createdProject.title} — ${doc.name}`,
           documentId: doc.id,
           projectId: createdProject.id,
-          workerId: data.workerId || undefined,
           pageNumber: index + 1,
-          createdById: user.id,
-          status: "ASSIGNED",
-          paymentAmount: 0,
         })),
-      });
-    }
-
-    if (createdProject.workerId && documents.length > 0) {
-      await tx.notification.create({
-        data: {
-          userId: createdProject.workerId,
-          type: "TASK_ASSIGNED",
-          title: `Project assigned: ${createdProject.title}`,
-          body: `${documents.length} documents have been assigned to you as part of this project.`,
-        },
       });
     }
 

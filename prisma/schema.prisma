@@ -62,6 +62,8 @@ model User {
 
   assignedTasks   Task[]    @relation("WorkerTasks")
   assignedProjects Project[] @relation("WorkerProjects")
+  projectAssignments ProjectAssignment[] @relation("ProjectAssignmentWorker")
+  createdProjectAssignments ProjectAssignment[] @relation("ProjectAssignmentCreator")
   createdTasks    Task[]    @relation("ManagerCreatedTasks")
   managedProjects Project[] @relation("ManagerProjects")
 
@@ -98,6 +100,8 @@ model Project {
   manager     User     @relation("ManagerProjects", fields: [managerId], references: [id])
   workerId    String?
   worker      User?    @relation("WorkerProjects", fields: [workerId], references: [id])
+  documents   ProjectDocument[]
+  assignments ProjectAssignment[]
   tasks       Task[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -120,8 +124,39 @@ model Document {
   updatedAt   DateTime @updatedAt
 
   tasks       Task[]
+  projects    ProjectDocument[]
 
   @@index([uploadedById])
+}
+
+model ProjectDocument {
+  id         String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentId String
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNumber Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, documentId])
+  @@index([projectId])
+  @@index([documentId])
+}
+
+model ProjectAssignment {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       User     @relation("ProjectAssignmentWorker", fields: [workerId], references: [id], onDelete: Cascade)
+  assignedById String
+  assignedBy   User     @relation("ProjectAssignmentCreator", fields: [assignedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@unique([projectId, workerId])
+  @@index([projectId])
+  @@index([workerId])
+  @@index([assignedById])
 }
 
 model Task {
